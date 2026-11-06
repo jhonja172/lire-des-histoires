@@ -44,11 +44,12 @@ async function readApiError(response) {
   }
 }
 
-async function postStory(path, text) {
+async function postStory(path, text, signal) {
   const response = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
+    signal,
   });
 
   if (!response.ok) {
@@ -253,9 +254,11 @@ translateButton.addEventListener("click", async () => {
   translateButton.disabled = true;
   statusMessage.removeAttribute("data-state");
   statusMessage.textContent = "Traduciendo historia…";
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
 
   try {
-    const result = await postStory("/api/translate", text);
+    const result = await postStory("/api/translate", text, controller.signal);
     if (typeof result.translation !== "string") {
       throw new Error("El servidor devolvió una respuesta de traducción inválida.");
     }
@@ -263,10 +266,13 @@ translateButton.addEventListener("click", async () => {
     statusMessage.textContent = "Traducción completada.";
   } catch (error) {
     statusMessage.dataset.state = "error";
-    statusMessage.textContent = error instanceof Error
-      ? error.message
-      : "No se pudo traducir la historia.";
+    statusMessage.textContent = error instanceof DOMException && error.name === "AbortError"
+      ? "La traducción tardó más de 2 minutos y se canceló."
+      : error instanceof Error
+        ? error.message
+        : "No se pudo traducir la historia.";
   } finally {
+    clearTimeout(timeoutId);
     translateButton.disabled = false;
   }
 });

@@ -100,16 +100,7 @@ def _install_french_to_spanish_translation():
 
 
 def _get_french_to_spanish_translation():
-    with translation_setup_lock:
-        translation_service = _find_installed_french_to_spanish_translation()
-        if translation_service is None:
-            raise RuntimeError("El paquete de traducción francés-español no está instalado.")
-        return translation_service
-
-
-@app.on_event("startup")
-async def install_french_to_spanish_translation():
-    await run_in_threadpool(_install_french_to_spanish_translation)
+    return _install_french_to_spanish_translation()
 
 
 @app.post("/api/translate")
