@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f4f6fb">
+    <meta name="theme-color" content="#ffffff">
     <title>Lire des Histoires</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,47 +12,69 @@
     <script type="module" src="js/app.js"></script>
   </head>
   <body>
-    <main class="page">
-      <section class="story-card" aria-labelledby="page-title">
-        <header class="card-header">
-          <p class="eyebrow">Práctica de francés</p>
-          <h1 id="page-title">Lire des Histoires</h1>
-          <p class="intro">Guarda una historia y sigue cada palabra mientras practicas.</p>
-        </header>
+    <main class="app-shell">
+      <header class="app-header">
+        <a class="brand" href="#" aria-label="Lire des Histoires, inicio">Lire des Histoires</a>
+      </header>
 
-        <form id="story-form" class="story-form">
-          <label for="story-text">Tu historia en francés</label>
-          <textarea
-            id="story-text"
-            name="story"
-            rows="7"
-            placeholder="Collez votre histoire en français ici…"
-            required
-          ></textarea>
-          <div class="form-actions">
-            <button type="submit">Guardar Historia</button>
-            <button id="play-button" class="secondary-button" type="button">Reproducir</button>
-            <button id="translate-button" class="secondary-button" type="button">Traducir</button>
+      <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
+
+      <section id="library-screen" class="screen" aria-labelledby="library-title">
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">Tu biblioteca</p>
+            <h1 id="library-title">Mis textos</h1>
           </div>
-          <label for="speed-select">Velocidad de reproducción</label>
-          <select id="speed-select">
-            <option value="0.5">0.5</option>
-            <option value="0.75">0.75</option>
-            <option value="1" selected>1</option>
-            <option value="1.25">1.25</option>
-            <option value="1.5">1.5</option>
-          </select>
-          <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
-        </form>
+          <button id="add-text-button" class="primary-button" type="button">Agregar Texto</button>
+        </div>
+        <ul id="story-list" class="story-list" aria-label="Historias guardadas"></ul>
+        <p id="empty-library" class="empty-state" hidden>Aún no hay textos guardados. Agrega uno para empezar.</p>
+      </section>
 
-        <section class="saved-story" aria-labelledby="saved-story-title">
-          <h2 id="saved-story-title">Historia guardada</h2>
-          <p id="story-output" class="story-output" aria-live="polite">
-            Tu historia aparecerá aquí, separada palabra por palabra.
-          </p>
-          <h2 id="translation-title">Traducción al español</h2>
-          <p id="translation-output" class="story-output" aria-live="polite"></p>
-        </section>
+      <section id="reader-screen" class="screen" aria-labelledby="reader-title" hidden>
+        <button id="back-to-library" class="text-button back-button" type="button">
+          <span aria-hidden="true">←</span> Volver a la biblioteca
+        </button>
+        <h1 id="reader-title" class="reader-title"></h1>
+        <div class="reader-controls" aria-label="Controles de reproducción">
+          <button id="play-button" class="play-button" type="button" aria-label="Reproducir" aria-pressed="false">
+            <span aria-hidden="true">▶</span>
+          </button>
+          <label class="speed-control" for="speed-select">
+            Velocidad
+            <select id="speed-select">
+              <option value="0.5">0.5×</option>
+              <option value="0.75">0.75×</option>
+              <option value="1" selected>1×</option>
+              <option value="1.25">1.25×</option>
+              <option value="1.5">1.5×</option>
+            </select>
+          </label>
+        </div>
+        <p id="dictionary-result" class="dictionary-result" role="status" aria-live="polite" hidden></p>
+        <div id="reader-lines" class="reader-lines"></div>
+      </section>
+
+      <section id="add-screen" class="screen" aria-labelledby="add-title" hidden>
+        <button id="cancel-add-button" class="text-button back-button" type="button">
+          <span aria-hidden="true">←</span> Volver a la biblioteca
+        </button>
+        <div class="form-panel">
+          <p class="eyebrow">Nueva lectura</p>
+          <h1 id="add-title">Agregar texto</h1>
+          <form id="story-form" class="story-form">
+            <label for="story-text">Pega tu texto en francés</label>
+            <textarea
+              id="story-text"
+              name="story"
+              rows="12"
+              maxlength="5000"
+              placeholder="Collez votre histoire en français ici…"
+              required
+            ></textarea>
+            <button id="save-button" class="primary-button" type="submit">Guardar</button>
+          </form>
+        </div>
       </section>
     </main>
   </body>

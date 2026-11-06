@@ -1,8 +1,7 @@
 import base64
-import threading
 
 import edge_tts
-from argostranslate import package, translate
+from deep_translator import GoogleTranslator
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -18,7 +17,6 @@ app.add_middleware(
 )
 
 VOICE = "fr-CA-AntoineNeural"
-translation_setup_lock = threading.Lock()
 
 
 class TextRequest(BaseModel):
@@ -62,47 +60,6 @@ async def generate_audio(request: TextRequest):
     }
 
 
-def _find_installed_french_to_spanish_translation():
-    installed_languages = translate.get_installed_languages()
-    french = next((language for language in installed_languages if language.code == "fr"), None)
-    spanish = next((language for language in installed_languages if language.code == "es"), None)
-    has_direct_translation = any(
-        installed.from_code == "fr" and installed.to_code == "es"
-        for installed in package.get_installed_packages()
-    )
-    if not french or not spanish or not has_direct_translation:
-        return None
-    return french.get_translation(spanish)
-
-
-def _install_french_to_spanish_translation():
-    with translation_setup_lock:
-        translation_service = _find_installed_french_to_spanish_translation()
-        if translation_service is not None:
-            return translation_service
-
-        package.update_package_index()
-        translation_package = next(
-            (
-                available for available in package.get_available_packages()
-                if available.from_code == "fr" and available.to_code == "es"
-            ),
-            None,
-        )
-        if translation_package is None:
-            raise RuntimeError("No se encontró el paquete de traducción de francés a español.")
-
-        package.install_from_path(translation_package.download())
-        translation_service = _find_installed_french_to_spanish_translation()
-        if translation_service is None:
-            raise RuntimeError("Argos Translate no pudo instalar el paquete francés-español.")
-        return translation_service
-
-
-def _get_french_to_spanish_translation():
-    return _install_french_to_spanish_translation()
-
-
 @app.post("/api/translate")
 async def translate_text(request: TextRequest):
     text = request.text.strip()
@@ -110,9 +67,13 @@ async def translate_text(request: TextRequest):
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío.")
 
     try:
-        translation_service = await run_in_threadpool(_get_french_to_spanish_translation)
-        translated_text = await run_in_threadpool(translation_service.translate, text)
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        translated = await run_in_threadpool(
+            lambda: GoogleTranslator(source="fr", target="es").translate(text)
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo traducir el texto.",
+        ) from error
 
-    return {"translation": translated_text}
+    return {"translation": translated}

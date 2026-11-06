@@ -1,6 +1,6 @@
 fastapi
 uvicorn
 edge-tts
-argostranslate
+deep-translator
 pydantic
 starlette
