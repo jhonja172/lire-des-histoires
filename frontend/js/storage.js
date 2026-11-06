@@ -24,6 +24,7 @@ export async function saveStory(content) {
     method: "POST",
     headers: {
       apikey: SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
       "Content-Type": "application/json",
       Prefer: "return=representation",
     },
@@ -49,6 +50,7 @@ export async function getStories() {
   const response = await fetch(`${STORIES_ENDPOINT}?${query}`, {
     headers: {
       apikey: SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
     },
   });
 

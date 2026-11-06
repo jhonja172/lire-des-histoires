@@ -9,6 +9,7 @@ const translationOutput = document.querySelector("#translation-output");
 const statusMessage = document.querySelector("#status-message");
 const playButton = document.querySelector("#play-button");
 const translateButton = document.querySelector("#translate-button");
+const speedSelect = document.querySelector("#speed-select");
 const audioPlayer = new Audio();
 const storyHistory = document.createElement("section");
 storyHistory.className = "story-history";
@@ -116,11 +117,10 @@ form.addEventListener("submit", async (event) => {
   statusMessage.textContent = "Guardando…";
 
   try {
-    const savedStory = await saveStory(text);
-    stories = [savedStory, ...stories];
+    await saveStory(text);
+    stories = await getStories();
     renderStoryHistory();
-    textInput.value = savedStory.content;
-    renderStory(savedStory.content);
+    renderStory(text);
     statusMessage.textContent = "Historia guardada en Supabase.";
   } catch (error) {
     statusMessage.dataset.state = "error";
@@ -153,6 +153,10 @@ async function loadStories() {
 }
 
 loadStories();
+
+speedSelect.addEventListener("change", () => {
+  audioPlayer.playbackRate = Number(speedSelect.value);
+});
 
 playButton.addEventListener("click", async () => {
   if (!audioPlayer.paused) {

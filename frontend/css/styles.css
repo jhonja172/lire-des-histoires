@@ -20,7 +20,8 @@ body {
 }
 
 button,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -99,6 +100,16 @@ textarea {
   color: #20283a;
   line-height: 1.65;
   transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid #dce1ec;
+  border-radius: 10px;
+  background: #fff;
+  color: #20283a;
 }
 
 textarea::placeholder {

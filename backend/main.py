@@ -62,18 +62,24 @@ async def generate_audio(request: TextRequest):
     }
 
 
-def _get_french_to_spanish_translation():
+def _find_installed_french_to_spanish_translation():
+    installed_languages = translate.get_installed_languages()
+    french = next((language for language in installed_languages if language.code == "fr"), None)
+    spanish = next((language for language in installed_languages if language.code == "es"), None)
+    has_direct_translation = any(
+        installed.from_code == "fr" and installed.to_code == "es"
+        for installed in package.get_installed_packages()
+    )
+    if not french or not spanish or not has_direct_translation:
+        return None
+    return french.get_translation(spanish)
+
+
+def _install_french_to_spanish_translation():
     with translation_setup_lock:
-        installed_languages = translate.get_installed_languages()
-        french = next((language for language in installed_languages if language.code == "fr"), None)
-        spanish = next((language for language in installed_languages if language.code == "es"), None)
-        installed_packages = package.get_installed_packages()
-        has_direct_translation = any(
-            installed.from_code == "fr" and installed.to_code == "es"
-            for installed in installed_packages
-        )
-        if french and spanish and has_direct_translation:
-            return french.get_translation(spanish)
+        translation_service = _find_installed_french_to_spanish_translation()
+        if translation_service is not None:
+            return translation_service
 
         package.update_package_index()
         translation_package = next(
@@ -87,16 +93,23 @@ def _get_french_to_spanish_translation():
             raise RuntimeError("No se encontró el paquete de traducción de francés a español.")
 
         package.install_from_path(translation_package.download())
-        installed_languages = translate.get_installed_languages()
-        french = next((language for language in installed_languages if language.code == "fr"), None)
-        spanish = next((language for language in installed_languages if language.code == "es"), None)
-        has_direct_translation = any(
-            installed.from_code == "fr" and installed.to_code == "es"
-            for installed in package.get_installed_packages()
-        )
-        if not french or not spanish or not has_direct_translation:
+        translation_service = _find_installed_french_to_spanish_translation()
+        if translation_service is None:
             raise RuntimeError("Argos Translate no pudo instalar el paquete francés-español.")
-        return french.get_translation(spanish)
+        return translation_service
+
+
+def _get_french_to_spanish_translation():
+    with translation_setup_lock:
+        translation_service = _find_installed_french_to_spanish_translation()
+        if translation_service is None:
+            raise RuntimeError("El paquete de traducción francés-español no está instalado.")
+        return translation_service
+
+
+@app.on_event("startup")
+async def install_french_to_spanish_translation():
+    await run_in_threadpool(_install_french_to_spanish_translation)
 
 
 @app.post("/api/translate")
