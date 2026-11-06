@@ -1,12 +1,14 @@
 import { getStories, saveStory } from "./storage.js";
 import { startKaraoke } from "./karaoke.js";
 
-const API_URL = "PENDIENTE";
+const API_URL = "https://lire-des-histoires.onrender.com";
 const form = document.querySelector("#story-form");
 const textInput = document.querySelector("#story-text");
 const storyOutput = document.querySelector("#story-output");
+const translationOutput = document.querySelector("#translation-output");
 const statusMessage = document.querySelector("#status-message");
 const playButton = document.querySelector("#play-button");
+const translateButton = document.querySelector("#translate-button");
 const audioPlayer = new Audio();
 const storyHistory = document.createElement("section");
 storyHistory.className = "story-history";
@@ -19,6 +21,40 @@ let currentAudioUrl = null;
 let currentAudioText = null;
 let currentWordBoundaries = [];
 let stories = [];
+
+async function readApiError(response) {
+  const body = await response.text();
+  if (!body) {
+    return `Error del servidor (${response.status}).`;
+  }
+
+  try {
+    const details = JSON.parse(body);
+    if (typeof details?.detail === "string") {
+      return details.detail;
+    }
+    if (Array.isArray(details?.detail)) {
+      const message = details.detail.map((item) => item.msg).filter(Boolean).join(" ");
+      return message || `Error del servidor (${response.status}).`;
+    }
+    return details?.message ?? `Error del servidor (${response.status}).`;
+  } catch {
+    return body;
+  }
+}
+
+async function postStory(path, text) {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+  return response.json();
+}
 
 function renderStory(text) {
   storyOutput.replaceChildren();
@@ -48,6 +84,7 @@ function renderStoryHistory() {
     selectButton.textContent = story.content;
     selectButton.addEventListener("click", () => {
       textInput.value = story.content;
+      translationOutput.textContent = "";
       renderStory(story.content);
       statusMessage.removeAttribute("data-state");
       statusMessage.textContent = "Historia cargada.";
@@ -156,30 +193,17 @@ playButton.addEventListener("click", async () => {
     return;
   }
 
-  if (API_URL === "PENDIENTE") {
-    statusMessage.dataset.state = "error";
-    statusMessage.textContent = "Configura API_URL con la URL de tu backend en Render.";
-    return;
-  }
-
   playButton.disabled = true;
   statusMessage.removeAttribute("data-state");
   statusMessage.textContent = "Generando audio…";
 
   try {
-    const response = await fetch(`${API_URL.replace(/\/$/u, "")}/api/audio`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => null);
-      throw new Error(errorBody?.detail ?? `Error del servidor (${response.status}).`);
-    }
-
-    const result = await response.json();
-    if (typeof result.audio_base64 !== "string" || !Array.isArray(result.word_boundaries)) {
+    const result = await postStory("/api/audio", text);
+    if (
+      typeof result.audio_base64 !== "string"
+      || !Array.isArray(result.word_boundaries)
+      || !result.word_boundaries.every((boundary) => Number.isFinite(boundary?.start))
+    ) {
       throw new Error("El servidor devolvió una respuesta de audio inválida.");
     }
 
@@ -211,6 +235,40 @@ playButton.addEventListener("click", async () => {
   }
 
   playButton.disabled = false;
+});
+
+translateButton.addEventListener("click", async () => {
+  const text = textInput.value.trim();
+  if (!text) {
+    statusMessage.dataset.state = "error";
+    statusMessage.textContent = "Escribe o pega una historia antes de traducirla.";
+    textInput.focus();
+    return;
+  }
+
+  translateButton.disabled = true;
+  statusMessage.removeAttribute("data-state");
+  statusMessage.textContent = "Traduciendo historia…";
+
+  try {
+    const result = await postStory("/api/translate", text);
+    if (typeof result.translation !== "string") {
+      throw new Error("El servidor devolvió una respuesta de traducción inválida.");
+    }
+    translationOutput.textContent = result.translation;
+    statusMessage.textContent = "Traducción completada.";
+  } catch (error) {
+    statusMessage.dataset.state = "error";
+    statusMessage.textContent = error instanceof Error
+      ? error.message
+      : "No se pudo traducir la historia.";
+  } finally {
+    translateButton.disabled = false;
+  }
+});
+
+textInput.addEventListener("input", () => {
+  translationOutput.textContent = "";
 });
 
 audioPlayer.addEventListener("ended", () => {
