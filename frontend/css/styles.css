@@ -76,6 +76,12 @@ h1 {
   gap: 12px;
 }
 
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .story-form label,
 .saved-story h2 {
   font-size: 0.94rem;
@@ -130,6 +136,16 @@ button:focus-visible {
   outline-offset: 3px;
 }
 
+.secondary-button {
+  border: 1px solid #dce1ec;
+  background: #fff;
+  color: #38435d;
+}
+
+.secondary-button:hover {
+  background: #f5f6fa;
+}
+
 .status-message {
   min-height: 1.4em;
   margin: 0;
@@ -161,6 +177,62 @@ button:focus-visible {
 .story-word {
   border-radius: 4px;
   padding: 2px 1px;
+  transition: background-color 100ms ease, color 100ms ease;
+}
+
+.story-word.word-highlight {
+  background: #fff0a8;
+  color: #252b3a;
+}
+
+.story-history {
+  margin-top: 25px;
+  padding-top: 25px;
+  border-top: 1px solid #edf0f5;
+}
+
+.story-history h2 {
+  margin-bottom: 13px;
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+
+.story-history ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.story-history li {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 10px;
+}
+
+.story-history .history-story-button {
+  justify-self: stretch;
+  height: auto;
+  padding: 0;
+  background: transparent;
+  color: #485268;
+  font-weight: 400;
+  line-height: 1.6;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.story-history .history-story-button:hover {
+  color: #4156c5;
+}
+
+.story-history time {
+  color: #818a9c;
+  font-size: 0.76rem;
 }
 
 @media (max-width: 520px) {

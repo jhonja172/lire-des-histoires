@@ -1,60 +1,64 @@
-const DATABASE_NAME = "lire-des-histoires";
-const DATABASE_VERSION = 1;
-const STORY_STORE = "stories";
+const SUPABASE_URL = "https://qscskrbyyvkfutotrcgo.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_AYuVarEL1KRgbEr2rdpaxg_5-XdM7rY";
+const STORIES_ENDPOINT = `${SUPABASE_URL}/rest/v1/stories`;
 
-function openDatabase() {
-  return new Promise((resolve, reject) => {
-    if (!("indexedDB" in window)) {
-      reject(new Error("Este navegador no permite guardar historias localmente."));
-      return;
-    }
-
-    const request = window.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains(STORY_STORE)) {
-        database.createObjectStore(STORY_STORE, {
-          keyPath: "id",
-          autoIncrement: true,
-        });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(
-      request.error ?? new Error("No se pudo abrir el almacenamiento de historias.")
-    );
-    request.onblocked = () => reject(
-      new Error("El almacenamiento está ocupado por otra pestaña. Cierra las demás e inténtalo de nuevo.")
-    );
-  });
-}
-
-export async function saveStory(text) {
-  const database = await openDatabase();
+async function readError(response) {
+  const body = await response.text();
+  if (!body) {
+    return `Error de Supabase (${response.status}).`;
+  }
 
   try {
-    return await new Promise((resolve, reject) => {
-      const transaction = database.transaction(STORY_STORE, "readwrite");
-      const request = transaction.objectStore(STORY_STORE).add({
-        text,
-        savedAt: new Date().toISOString(),
-      });
-      let storyId;
-
-      request.onsuccess = () => {
-        storyId = request.result;
-      };
-      request.onerror = () => reject(
-        request.error ?? new Error("No se pudo guardar la historia.")
-      );
-      transaction.oncomplete = () => resolve(storyId);
-      transaction.onabort = () => reject(
-        transaction.error ?? new Error("No se pudo completar el guardado.")
-      );
-    });
-  } finally {
-    database.close();
+    const details = JSON.parse(body);
+    return details?.message
+      ?? details?.details
+      ?? details?.hint
+      ?? `Error de Supabase (${response.status}).`;
+  } catch {
+    return body;
   }
+}
+
+export async function saveStory(content) {
+  const response = await fetch(STORIES_ENDPOINT, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_PUBLISHABLE_KEY,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify({ content }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  const [story] = await response.json();
+  if (!story || typeof story.content !== "string") {
+    throw new Error("Supabase no devolvió la historia guardada.");
+  }
+  return story;
+}
+
+export async function getStories() {
+  const query = new URLSearchParams({
+    select: "id,created_at,content",
+    order: "created_at.desc",
+  });
+  const response = await fetch(`${STORIES_ENDPOINT}?${query}`, {
+    headers: {
+      apikey: SUPABASE_PUBLISHABLE_KEY,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  const stories = await response.json();
+  if (!Array.isArray(stories)) {
+    throw new Error("Supabase devolvió una lista de historias inválida.");
+  }
+  return stories;
 }
