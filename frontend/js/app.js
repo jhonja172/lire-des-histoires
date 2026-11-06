@@ -214,7 +214,7 @@ async function translateReaderLines(signal) {
   let hasErrors = false;
   translateButton.disabled = true;
   setStatus("Traduciendo líneas…");
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     if (signal.aborted) {
       break;
     }
@@ -230,6 +230,10 @@ async function translateReaderLines(signal) {
       hasErrors = true;
       translation.textContent = "No se pudo cargar la traducción.";
       setStatus(error instanceof Error ? error.message : "Falló una traducción.", true);
+    }
+
+    if (!signal.aborted && index < lines.length - 1) {
+      await new Promise((r) => setTimeout(r, 300));
     }
   }
   if (translationController?.signal === signal) {
