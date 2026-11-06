@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f6fb">
+    <title>Lire des Histoires</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <script type="module" src="js/app.js"></script>
+  </head>
+  <body>
+    <main class="page">
+      <section class="story-card" aria-labelledby="page-title">
+        <header class="card-header">
+          <p class="eyebrow">Práctica de francés</p>
+          <h1 id="page-title">Lire des Histoires</h1>
+          <p class="intro">Guarda una historia y sigue cada palabra mientras practicas.</p>
+        </header>
+
+        <form id="story-form" class="story-form">
+          <label for="story-text">Tu historia en francés</label>
+          <textarea
+            id="story-text"
+            name="story"
+            rows="7"
+            placeholder="Collez votre histoire en français ici…"
+            required
+          ></textarea>
+          <button type="submit">Guardar Historia</button>
+          <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
+        </form>
+
+        <section class="saved-story" aria-labelledby="saved-story-title">
+          <h2 id="saved-story-title">Historia guardada</h2>
+          <p id="story-output" class="story-output" aria-live="polite">
+            Tu historia aparecerá aquí, separada palabra por palabra.
+          </p>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>
