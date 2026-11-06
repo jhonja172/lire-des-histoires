@@ -29,6 +29,7 @@ let stories = [];
 let currentStoryText = "";
 let currentAudioText = null;
 let currentAudioUrl = null;
+let currentAudioBase64 = null;
 let currentWordBoundaries = [];
 let stopKaraoke = () => {};
 let translationController = null;
@@ -255,7 +256,9 @@ async function translateReaderLines(signal) {
 function stopCurrentAudio() {
   audioPlayer.pause();
   stopKaraoke();
+  stopKaraoke = () => {};
   currentAudioText = null;
+  currentAudioBase64 = null;
   currentWordBoundaries = [];
   playButton.setAttribute("aria-label", "Reproducir");
   playButton.setAttribute("aria-pressed", "false");
@@ -341,11 +344,14 @@ async function playStory() {
       const binary = atob(result.audio_base64);
       const audioBytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
       const audioBlob = new Blob([audioBytes], { type: "audio/mpeg" });
+      stopKaraoke();
+      stopKaraoke = () => {};
       if (currentAudioUrl) {
         URL.revokeObjectURL(currentAudioUrl);
       }
       currentAudioUrl = URL.createObjectURL(audioBlob);
       currentAudioText = currentStoryText;
+      currentAudioBase64 = result.audio_base64;
       currentWordBoundaries = result.word_boundaries;
       audioPlayer.src = currentAudioUrl;
       audioPlayer.currentTime = 0;
@@ -353,6 +359,7 @@ async function playStory() {
       await audioPlayer.play();
     }
 
+    stopKaraoke();
     stopKaraoke = startKaraoke(audioPlayer, currentWordBoundaries);
     setPlayingState(true);
     setStatus("Reproduciendo historia…");

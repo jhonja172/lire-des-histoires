@@ -297,8 +297,10 @@ textarea:focus-visible,
 }
 
 .story-word.word-highlight {
-  background: #dbeafe;
-  color: #172033;
+  background-color: #d4edda;
+  color: #155724;
+  border-radius: 4px;
+  transition: background-color 0.1s ease;
 }
 
 .modal-backdrop {

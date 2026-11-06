@@ -1,11 +1,43 @@
+function normalizeWord(value) {
+  return value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
 export function startKaraoke(audio, wordBoundaries) {
-  const words = Array.from(document.querySelectorAll(".story-word"));
+  const words = Array.from(document.querySelectorAll(".line-french .story-word"));
   const boundaries = wordBoundaries
     .filter((boundary) => Number.isFinite(boundary.start))
     .sort((first, second) => first.start - second.start);
-  let animationFrame = null;
+  let nextWordIndex = 0;
   let highlightedWord = null;
   let active = true;
+
+  const mappedBoundaries = boundaries.map((boundary) => {
+    const boundaryWord = normalizeWord(boundary.text ?? "");
+    let wordIndex = nextWordIndex;
+
+    if (boundaryWord) {
+      const matchIndex = words.findIndex((word, index) => {
+        if (index < nextWordIndex) {
+          return false;
+        }
+        const storyWord = normalizeWord(word.textContent);
+        return storyWord === boundaryWord
+          || storyWord.includes(boundaryWord)
+          || boundaryWord.includes(storyWord);
+      });
+      if (matchIndex >= 0) {
+        wordIndex = matchIndex;
+      }
+    }
+
+    const mappedWord = words[wordIndex] ?? null;
+    if (mappedWord) {
+      const storyWord = normalizeWord(mappedWord.textContent);
+      nextWordIndex = storyWord === boundaryWord ? wordIndex + 1 : wordIndex;
+    }
+
+    return { start: boundary.start, word: mappedWord };
+  });
 
   const clearHighlight = () => {
     if (highlightedWord) {
@@ -14,21 +46,21 @@ export function startKaraoke(audio, wordBoundaries) {
     }
   };
 
-  const update = () => {
-    if (!active) {
+  const updateHighlight = () => {
+    if (!active || audio.paused || audio.ended) {
+      clearHighlight();
       return;
     }
 
-    const currentTime = audio.currentTime;
-    let activeIndex = -1;
-    for (let index = 0; index < boundaries.length; index += 1) {
-      if (boundaries[index].start > currentTime) {
+    let activeBoundary = null;
+    for (const boundary of mappedBoundaries) {
+      if (boundary.start > audio.currentTime) {
         break;
       }
-      activeIndex = index;
+      activeBoundary = boundary;
     }
 
-    const nextWord = activeIndex >= 0 ? words[activeIndex] : null;
+    const nextWord = activeBoundary?.word ?? null;
     if (nextWord !== highlightedWord) {
       clearHighlight();
       if (nextWord) {
@@ -36,21 +68,22 @@ export function startKaraoke(audio, wordBoundaries) {
         highlightedWord = nextWord;
       }
     }
-
-    if (!audio.paused && !audio.ended) {
-      animationFrame = requestAnimationFrame(update);
-    } else {
-      clearHighlight();
-    }
   };
 
-  animationFrame = requestAnimationFrame(update);
+  audio.addEventListener("timeupdate", updateHighlight);
+  audio.addEventListener("seeking", updateHighlight);
+  audio.addEventListener("play", updateHighlight);
+  audio.addEventListener("pause", clearHighlight);
+  audio.addEventListener("ended", clearHighlight);
+  updateHighlight();
 
   return () => {
     active = false;
-    if (animationFrame !== null) {
-      cancelAnimationFrame(animationFrame);
-    }
+    audio.removeEventListener("timeupdate", updateHighlight);
+    audio.removeEventListener("seeking", updateHighlight);
+    audio.removeEventListener("play", updateHighlight);
+    audio.removeEventListener("pause", clearHighlight);
+    audio.removeEventListener("ended", clearHighlight);
     clearHighlight();
   };
 }
