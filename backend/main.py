@@ -1,7 +1,8 @@
 import base64
+import os
 
 import edge_tts
-from deep_translator import GoogleTranslator
+from google import genai
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -66,14 +67,27 @@ async def translate_text(request: TextRequest):
     if not text:
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío.")
 
+    prompt = (
+        f"Traduce el siguiente texto del francés al español. "
+        f"Devuelve únicamente la traducción, sin explicaciones ni comillas: {text}"
+    )
+
     try:
-        translated = await run_in_threadpool(
-            lambda: GoogleTranslator(source="fr", target="es").translate(text)
+        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        response = await run_in_threadpool(
+            lambda: client.models.generate_content(
+                model="gemini-3.5-flash-lite",
+                contents=prompt,
+            )
         )
-    except Exception as error:
+    except Exception as e:
+        print(f"Error en Gemini: {e}")
         raise HTTPException(
             status_code=500,
             detail="No se pudo traducir el texto.",
-        ) from error
+        ) from e
 
-    return {"translation": translated}
+    if not response.text:
+        raise HTTPException(status_code=500, detail="Gemini no devolvió una traducción.")
+
+    return {"translation": response.text}

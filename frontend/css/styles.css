@@ -207,6 +207,7 @@ textarea:focus-visible,
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 22px;
   margin: 0 auto 30px;
 }
@@ -300,16 +301,59 @@ textarea:focus-visible,
   color: #172033;
 }
 
-.dictionary-result {
-  width: fit-content;
-  max-width: 100%;
-  margin: 0 auto 20px;
-  padding: 9px 14px;
-  border-radius: 8px;
+.modal-backdrop {
+  position: fixed;
+  z-index: 10;
+  display: grid;
+  padding: 20px;
+  background: rgb(15 23 42 / 45%);
+  inset: 0;
+  place-items: center;
+}
+
+.dictionary-modal {
+  position: relative;
+  width: min(100%, 400px);
+  min-height: 170px;
+  padding: 30px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 20%);
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #64748b;
+  font-size: 1.65rem;
+  line-height: 1;
+  place-items: center;
+}
+
+.modal-close:hover {
   background: #f1f5f9;
-  color: #475569;
-  font-size: 0.88rem;
-  text-align: center;
+  color: #172033;
+}
+
+.modal-word {
+  margin: 0 0 12px;
+  padding-right: 30px;
+  font-size: 1.45rem;
+}
+
+.modal-translation {
+  min-height: 1.5em;
+  margin: 0;
+  color: #64748b;
+  line-height: 1.6;
 }
 
 .form-panel {

@@ -16,9 +16,13 @@ const storyText = document.querySelector("#story-text");
 const saveButton = document.querySelector("#save-button");
 const readerTitle = document.querySelector("#reader-title");
 const readerLines = document.querySelector("#reader-lines");
-const dictionaryResult = document.querySelector("#dictionary-result");
 const playButton = document.querySelector("#play-button");
+const translateButton = document.querySelector("#translate-button");
 const speedSelect = document.querySelector("#speed-select");
+const dictionaryModal = document.querySelector("#dictionary-modal");
+const modalWord = document.querySelector("#modal-word");
+const modalTranslation = document.querySelector("#modal-translation");
+const closeDictionaryModalButton = document.querySelector("#close-dictionary-modal");
 const audioPlayer = new Audio();
 
 let stories = [];
@@ -159,15 +163,19 @@ async function lookupWord(wordElement) {
   wordLookupController?.abort();
   const controller = new AbortController();
   wordLookupController = controller;
-  dictionaryResult.hidden = false;
-  dictionaryResult.textContent = `Buscando «${word}»…`;
+  modalWord.textContent = word;
+  modalTranslation.textContent = "Buscando traducción…";
+  dictionaryModal.hidden = false;
+  closeDictionaryModalButton.focus();
 
   try {
     const translation = await translateText(word, controller.signal);
-    dictionaryResult.textContent = `${word} — ${translation}`;
+    if (!controller.signal.aborted) {
+      modalTranslation.textContent = translation;
+    }
   } catch (error) {
     if (!controller.signal.aborted) {
-      dictionaryResult.textContent = error instanceof Error
+      modalTranslation.textContent = error instanceof Error
         ? error.message
         : "No se pudo consultar la palabra.";
     }
@@ -204,9 +212,11 @@ function renderFrenchLine(paragraph, text) {
 async function translateReaderLines(signal) {
   const lines = Array.from(readerLines.querySelectorAll(".reader-line"));
   let hasErrors = false;
+  translateButton.disabled = true;
+  setStatus("Traduciendo líneas…");
   for (const line of lines) {
     if (signal.aborted) {
-      return;
+      break;
     }
 
     const frenchText = line.dataset.frenchText;
@@ -215,12 +225,15 @@ async function translateReaderLines(signal) {
       translation.textContent = await translateText(frenchText, signal);
     } catch (error) {
       if (signal.aborted) {
-        return;
+        break;
       }
       hasErrors = true;
       translation.textContent = "No se pudo cargar la traducción.";
       setStatus(error instanceof Error ? error.message : "Falló una traducción.", true);
     }
+  }
+  if (translationController?.signal === signal) {
+    translateButton.disabled = false;
   }
   if (signal.aborted) {
     return;
@@ -248,12 +261,12 @@ function stopCurrentAudio() {
 function openStory(story) {
   translationController?.abort();
   wordLookupController?.abort();
+  translateButton.disabled = false;
+  closeDictionaryModal();
   stopCurrentAudio();
   currentStoryText = story.content.trim();
   readerTitle.textContent = storyTitle(story.content);
   readerLines.replaceChildren();
-  dictionaryResult.hidden = true;
-  dictionaryResult.textContent = "";
 
   const paragraphs = currentStoryText
     .split(/\r?\n/u)
@@ -271,7 +284,7 @@ function openStory(story) {
 
     const translation = document.createElement("p");
     translation.className = "line-translation";
-    translation.textContent = "Cargando traducción…";
+    translation.textContent = "Pulsa «Traducir» para ver la traducción.";
     translation.setAttribute("aria-live", "polite");
 
     line.append(french, translation);
@@ -280,8 +293,12 @@ function openStory(story) {
 
   translationController = new AbortController();
   showScreen("reader");
-  setStatus("Cargando traducciones…");
-  void translateReaderLines(translationController.signal);
+  setStatus("");
+}
+
+function closeDictionaryModal() {
+  wordLookupController?.abort();
+  dictionaryModal.hidden = true;
 }
 
 function setPlayingState(isPlaying) {
@@ -351,6 +368,7 @@ addTextButton.addEventListener("click", () => {
 backToLibraryButton.addEventListener("click", () => {
   translationController?.abort();
   wordLookupController?.abort();
+  closeDictionaryModal();
   stopCurrentAudio();
   showScreen("library");
   setStatus("");
@@ -388,8 +406,25 @@ storyForm.addEventListener("submit", async (event) => {
 });
 
 playButton.addEventListener("click", playStory);
+translateButton.addEventListener("click", () => {
+  translationController?.abort();
+  translationController = new AbortController();
+  void translateReaderLines(translationController.signal);
+});
 speedSelect.addEventListener("change", () => {
   audioPlayer.playbackRate = Number(speedSelect.value);
+});
+
+closeDictionaryModalButton.addEventListener("click", closeDictionaryModal);
+dictionaryModal.addEventListener("click", (event) => {
+  if (event.target === dictionaryModal) {
+    closeDictionaryModal();
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !dictionaryModal.hidden) {
+    closeDictionaryModal();
+  }
 });
 
 audioPlayer.addEventListener("pause", () => {
@@ -408,6 +443,7 @@ audioPlayer.addEventListener("ended", () => {
 document.querySelector(".brand").addEventListener("click", (event) => {
   event.preventDefault();
   translationController?.abort();
+  closeDictionaryModal();
   stopCurrentAudio();
   showScreen("library");
   setStatus("");
