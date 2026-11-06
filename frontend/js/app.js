@@ -330,13 +330,17 @@ async function playStory() {
   try {
     if (currentAudioUrl && currentAudioText === currentStoryText && !audioPlayer.ended) {
       audioPlayer.playbackRate = Number(speedSelect.value);
-      await audioPlayer.play();
     } else {
       const result = await postApi("/api/audio", currentStoryText);
       if (
         typeof result.audio_base64 !== "string"
         || !Array.isArray(result.word_boundaries)
-        || !result.word_boundaries.every((boundary) => Number.isFinite(boundary?.start))
+        || !result.word_boundaries.every((boundary) => (
+          typeof boundary?.text === "string"
+          && Number.isFinite(boundary.start)
+          && Number.isFinite(boundary.duration)
+          && boundary.duration > 0
+        ))
       ) {
         throw new Error("El servidor devolvió una respuesta de audio inválida.");
       }
@@ -356,11 +360,11 @@ async function playStory() {
       audioPlayer.src = currentAudioUrl;
       audioPlayer.currentTime = 0;
       audioPlayer.playbackRate = Number(speedSelect.value);
-      await audioPlayer.play();
     }
 
     stopKaraoke();
     stopKaraoke = startKaraoke(audioPlayer, currentWordBoundaries);
+    await audioPlayer.play();
     setPlayingState(true);
     setStatus("Reproduciendo historia…");
   } catch (error) {

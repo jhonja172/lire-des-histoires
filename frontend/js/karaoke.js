@@ -5,10 +5,13 @@ function normalizeWord(value) {
 export function startKaraoke(audio, wordBoundaries) {
   const words = Array.from(document.querySelectorAll(".line-french .story-word"));
   const boundaries = wordBoundaries
-    .filter((boundary) => Number.isFinite(boundary.start))
+    .filter((boundary) => (
+      Number.isFinite(boundary.start)
+      && Number.isFinite(boundary.duration)
+      && boundary.duration > 0
+    ))
     .sort((first, second) => first.start - second.start);
   let nextWordIndex = 0;
-  let highlightedWord = null;
   let active = true;
 
   const mappedBoundaries = boundaries.map((boundary) => {
@@ -16,65 +19,47 @@ export function startKaraoke(audio, wordBoundaries) {
     let wordIndex = nextWordIndex;
 
     if (boundaryWord) {
-      const matchIndex = words.findIndex((word, index) => {
-        if (index < nextWordIndex) {
-          return false;
-        }
-        const storyWord = normalizeWord(word.textContent);
-        return storyWord === boundaryWord
-          || storyWord.includes(boundaryWord)
-          || boundaryWord.includes(storyWord);
-      });
+      const matchIndex = words.findIndex((word, index) => (
+        index >= nextWordIndex
+        && normalizeWord(word.textContent) === boundaryWord
+      ));
       if (matchIndex >= 0) {
         wordIndex = matchIndex;
       }
     }
 
-    const mappedWord = words[wordIndex] ?? null;
-    if (mappedWord) {
-      const storyWord = normalizeWord(mappedWord.textContent);
-      nextWordIndex = storyWord === boundaryWord ? wordIndex + 1 : wordIndex;
+    const word = words[wordIndex] ?? null;
+    if (word) {
+      nextWordIndex = wordIndex + 1;
     }
-
-    return { start: boundary.start, word: mappedWord };
+    return { start: boundary.start, duration: boundary.duration, word };
   });
 
-  const clearHighlight = () => {
-    if (highlightedWord) {
-      highlightedWord.classList.remove("word-highlight");
-      highlightedWord = null;
-    }
+  const clearHighlights = () => {
+    document.querySelectorAll(".word-highlight").forEach((element) => {
+      element.classList.remove("word-highlight");
+    });
   };
 
   const updateHighlight = () => {
+    clearHighlights();
     if (!active || audio.paused || audio.ended) {
-      clearHighlight();
       return;
     }
 
-    let activeBoundary = null;
-    for (const boundary of mappedBoundaries) {
-      if (boundary.start > audio.currentTime) {
-        break;
-      }
-      activeBoundary = boundary;
-    }
-
-    const nextWord = activeBoundary?.word ?? null;
-    if (nextWord !== highlightedWord) {
-      clearHighlight();
-      if (nextWord) {
-        nextWord.classList.add("word-highlight");
-        highlightedWord = nextWord;
-      }
-    }
+    const currentTime = audio.currentTime;
+    const activeBoundary = mappedBoundaries.find((boundary) => (
+      boundary.start <= currentTime
+      && boundary.start + boundary.duration > currentTime
+    ));
+    activeBoundary?.word?.classList.add("word-highlight");
   };
 
   audio.addEventListener("timeupdate", updateHighlight);
   audio.addEventListener("seeking", updateHighlight);
   audio.addEventListener("play", updateHighlight);
-  audio.addEventListener("pause", clearHighlight);
-  audio.addEventListener("ended", clearHighlight);
+  audio.addEventListener("pause", clearHighlights);
+  audio.addEventListener("ended", clearHighlights);
   updateHighlight();
 
   return () => {
@@ -82,8 +67,8 @@ export function startKaraoke(audio, wordBoundaries) {
     audio.removeEventListener("timeupdate", updateHighlight);
     audio.removeEventListener("seeking", updateHighlight);
     audio.removeEventListener("play", updateHighlight);
-    audio.removeEventListener("pause", clearHighlight);
-    audio.removeEventListener("ended", clearHighlight);
-    clearHighlight();
+    audio.removeEventListener("pause", clearHighlights);
+    audio.removeEventListener("ended", clearHighlights);
+    clearHighlights();
   };
 }
