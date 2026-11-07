@@ -35,7 +35,7 @@ async def generate_audio(request: TextRequest):
     if not text:
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío.")
 
-    communicator = edge_tts.Communicate(text, VOICE)
+    communicator = edge_tts.Communicate(text, VOICE, boundary="WordBoundary")
     audio_chunks = []
     word_boundaries = []
 
@@ -43,6 +43,7 @@ async def generate_audio(request: TextRequest):
         if chunk["type"] == "audio":
             audio_chunks.append(chunk["data"])
         elif chunk["type"] == "WordBoundary":
+            print(f"WordBoundary: {chunk}")
             word_boundaries.append(
                 {
                     "text": chunk["text"],
