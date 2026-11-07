@@ -8,6 +8,7 @@ export function startKaraoke(wordElements) {
   }
 
   let animationFrameId = null;
+  let isSyncing = false;
   let activeWordIndex = -1;
 
   const clearHighlights = () => {
@@ -18,6 +19,7 @@ export function startKaraoke(wordElements) {
   };
 
   const stopSync = () => {
+    isSyncing = false;
     if (animationFrameId !== null) {
       cancelAnimationFrame(animationFrameId);
       animationFrameId = null;
@@ -58,17 +60,20 @@ export function startKaraoke(wordElements) {
 
   const syncKaraoke = () => {
     animationFrameId = null;
-    if (audioPlayer.paused || audioPlayer.ended) {
+    if (!isSyncing || audioPlayer.paused || audioPlayer.ended) {
       stopSync();
       return;
     }
 
     updateActiveWord();
-    animationFrameId = requestAnimationFrame(syncKaraoke);
+    if (isSyncing) {
+      animationFrameId = requestAnimationFrame(syncKaraoke);
+    }
   };
 
   const startSync = () => {
-    if (animationFrameId === null && !audioPlayer.paused && !audioPlayer.ended) {
+    if (!isSyncing && !audioPlayer.paused && !audioPlayer.ended) {
+      isSyncing = true;
       animationFrameId = requestAnimationFrame(syncKaraoke);
     }
   };

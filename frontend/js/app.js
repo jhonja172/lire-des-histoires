@@ -454,7 +454,6 @@ document.addEventListener("keydown", (event) => {
 });
 
 audioPlayer.addEventListener("pause", () => {
-  stopKaraoke();
   if (!audioPlayer.ended) {
     setPlayingState(false);
   }
