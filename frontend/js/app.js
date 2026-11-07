@@ -342,6 +342,7 @@ async function playStory() {
       audioPlayer.playbackRate = Number(speedSelect.value);
     } else {
       const result = await postApi("/api/audio", currentStoryText);
+      console.log("Tiempos recibidos:", result.word_boundaries);
       if (
         typeof result.audio_base64 !== "string"
         || !Array.isArray(result.word_boundaries)
@@ -372,6 +373,7 @@ async function playStory() {
       stopKaraoke = startKaraoke(wordElements);
     }
 
+    console.log("Audio a punto de sonar");
     await audioPlayer.play();
     setPlayingState(true);
     setStatus("Reproduciendo historia…");

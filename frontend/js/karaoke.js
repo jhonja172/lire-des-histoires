@@ -27,6 +27,7 @@ export function startKaraoke(wordElements) {
   };
 
   const updateActiveWord = () => {
+    console.log("Sincronizando... Tiempo actual:", audioPlayer.currentTime);
     if (audioPlayer.paused || audioPlayer.ended) {
       return;
     }
@@ -40,6 +41,9 @@ export function startKaraoke(wordElements) {
     }
 
     if (nextActiveWordIndex !== activeWordIndex) {
+      if (nextActiveWordIndex >= 0) {
+        console.log("Palabra activa encontrada:", wordBoundaries[nextActiveWordIndex].text);
+      }
       for (const wordElement of wordElements) {
         wordElement.classList.remove("word-highlight");
       }
