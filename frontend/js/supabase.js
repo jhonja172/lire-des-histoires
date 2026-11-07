@@ -48,8 +48,9 @@ export async function saveFlashcard(french, spanish) {
 
 export async function getFlashcards() {
   const query = new URLSearchParams({
-    select: "id,frase_francesa,traduccion_espanola,created_at",
-    order: "created_at.desc",
+    select: "id,frase_francesa,traduccion_espanola,created_at,nivel_dominio,proximo_repaso",
+    proximo_repaso: `lte.${new Date().toISOString()}`,
+    order: "proximo_repaso.asc",
   });
   const response = await fetch(`${TABLE_URL}?${query}`, {
     headers: getHeaders(),
@@ -64,4 +65,32 @@ export async function getFlashcards() {
     throw new Error("Supabase devolvió una lista de flashcards inválida.");
   }
   return flashcards;
+}
+
+export async function updateFlashcardProgress(id, nivelDominio, proximoRepaso) {
+  const query = new URLSearchParams({ id: `eq.${id}` });
+  const response = await fetch(`${TABLE_URL}?${query}`, {
+    method: "PATCH",
+    headers: getHeaders("return=minimal"),
+    body: JSON.stringify({
+      nivel_dominio: nivelDominio,
+      proximo_repaso: proximoRepaso,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+}
+
+export async function deleteFlashcard(id) {
+  const query = new URLSearchParams({ id: `eq.${id}` });
+  const response = await fetch(`${TABLE_URL}?${query}`, {
+    method: "DELETE",
+    headers: getHeaders("return=minimal"),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
 }

@@ -1,6 +1,11 @@
 import { getStories, saveStory } from "./storage.js";
 import { startKaraoke } from "./karaoke.js";
-import { getFlashcards, saveFlashcard } from "./supabase.js";
+import {
+  deleteFlashcard,
+  getFlashcards,
+  saveFlashcard,
+  updateFlashcardProgress,
+} from "./supabase.js";
 
 const API_URL = "https://lire-des-histoires.onrender.com";
 const homeScreen = document.querySelector("#home-screen");
@@ -34,6 +39,7 @@ const saveDictionaryFlashcardButton = document.querySelector("#save-dictionary-f
 const flashcardPanel = document.querySelector("#flashcard-panel");
 const flashcardCount = document.querySelector("#flashcard-count");
 const flashcardFrench = document.querySelector("#flashcard-french");
+const deleteFlashcardButton = document.querySelector("#delete-flashcard-button");
 const flashcardAudioButton = document.querySelector("#flashcard-audio-button");
 const flashcardAnswerForm = document.querySelector("#flashcard-answer-form");
 const flashcardSubmitButton = document.querySelector("#flashcard-submit-button");
@@ -443,6 +449,37 @@ function renderCurrentFlashcard() {
   nextFlashcardButton.hidden = true;
 }
 
+function getNextReviewDate(masterLevel) {
+  const reviewDays = [0, 1, 3, 7, 14, 30];
+  const daysUntilReview = reviewDays[Math.min(masterLevel, reviewDays.length - 1)];
+  const nextReview = new Date();
+  nextReview.setUTCDate(nextReview.getUTCDate() + daysUntilReview);
+  return nextReview.toISOString();
+}
+
+async function removeCurrentFlashcard() {
+  const flashcard = flashcards[currentFlashcardIndex];
+  if (!flashcard) {
+    return;
+  }
+  if (!window.confirm("¿Eliminar esta flashcard? Esta acción no se puede deshacer.")) {
+    return;
+  }
+
+  deleteFlashcardButton.disabled = true;
+  try {
+    await deleteFlashcard(flashcard.id);
+    flashcards.splice(currentFlashcardIndex, 1);
+    currentFlashcardIndex = Math.min(currentFlashcardIndex, flashcards.length - 1);
+    renderCurrentFlashcard();
+    setStatus("Flashcard eliminada.");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : "No se pudo eliminar la flashcard.", true);
+  } finally {
+    deleteFlashcardButton.disabled = false;
+  }
+}
+
 async function openFlashcards() {
   translationController?.abort();
   closeDictionaryModal();
@@ -641,6 +678,9 @@ storyForm.addEventListener("submit", async (event) => {
 
 playButton.addEventListener("click", playStory);
 flashcardAudioButton.addEventListener("click", playFlashcardAudio);
+deleteFlashcardButton.addEventListener("click", () => {
+  void removeCurrentFlashcard();
+});
 flashcardAnswerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const flashcard = flashcards[currentFlashcardIndex];
@@ -671,6 +711,19 @@ flashcardAnswerForm.addEventListener("submit", async (event) => {
       throw new Error("El servidor devolvió una validación inválida.");
     }
 
+    const newMasteryLevel = result.is_correct
+      ? (flashcard.nivel_dominio ?? 0) + 1
+      : 0;
+    const nextReview = result.is_correct
+      ? getNextReviewDate(newMasteryLevel)
+      : new Date().toISOString();
+    await updateFlashcardProgress(
+      flashcard.id,
+      newMasteryLevel,
+      nextReview,
+    );
+    flashcard.nivel_dominio = newMasteryLevel;
+    flashcard.proximo_repaso = nextReview;
     flashcardFeedback.textContent = result.feedback;
     flashcardFeedback.dataset.state = result.is_correct ? "correct" : "incorrect";
     flashcardAnswer.disabled = true;
