@@ -31,6 +31,7 @@ let currentAudioText = null;
 let currentAudioUrl = null;
 let currentAudioBase64 = null;
 let currentWordBoundaries = [];
+let wordSpans = [];
 let stopKaraoke = () => {};
 let translationController = null;
 let wordLookupController = null;
@@ -200,12 +201,14 @@ function createWordElement(value) {
   return word;
 }
 
-function renderFrenchLine(paragraph, text) {
+function renderFrenchLine(paragraph, text, wordSpans) {
   for (const part of text.split(/(\s+)/u)) {
     if (/^\s+$/u.test(part)) {
       paragraph.append(document.createTextNode(part));
     } else {
-      paragraph.append(createWordElement(part));
+      const wordSpan = createWordElement(part);
+      wordSpans.push(wordSpan);
+      paragraph.append(wordSpan);
     }
   }
 }
@@ -274,6 +277,7 @@ function openStory(story) {
   currentStoryText = story.content.trim();
   readerTitle.textContent = storyTitle(story.content);
   readerLines.replaceChildren();
+  wordSpans = [];
 
   const paragraphs = currentStoryText
     .split(/\r?\n/u)
@@ -287,7 +291,7 @@ function openStory(story) {
 
     const french = document.createElement("p");
     french.className = "line-french";
-    renderFrenchLine(french, text);
+    renderFrenchLine(french, text, wordSpans);
 
     const translation = document.createElement("p");
     translation.className = "line-translation";
@@ -338,8 +342,6 @@ async function playStory() {
         || !result.word_boundaries.every((boundary) => (
           typeof boundary?.text === "string"
           && Number.isFinite(boundary.start)
-          && Number.isFinite(boundary.duration)
-          && boundary.duration > 0
         ))
       ) {
         throw new Error("El servidor devolvió una respuesta de audio inválida.");
@@ -360,10 +362,9 @@ async function playStory() {
       audioPlayer.src = currentAudioUrl;
       audioPlayer.currentTime = 0;
       audioPlayer.playbackRate = Number(speedSelect.value);
+      stopKaraoke = startKaraoke(audioPlayer, currentWordBoundaries, wordSpans);
     }
 
-    stopKaraoke();
-    stopKaraoke = startKaraoke(audioPlayer, currentWordBoundaries);
     await audioPlayer.play();
     setPlayingState(true);
     setStatus("Reproduciendo historia…");
