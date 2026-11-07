@@ -448,13 +448,33 @@ textarea:focus-visible,
 }
 
 .flashcard-french {
-  min-height: 2.4em;
-  margin: 0 auto 22px;
+  min-height: 1.4em;
+  margin: 0 auto 16px;
   color: #172033;
   font-size: clamp(1.35rem, 4vw, 1.8rem);
   font-weight: 600;
   line-height: 1.4;
   text-align: center;
+}
+
+.answer-container {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border-radius: 11px;
+  background: #e0f2fe;
+  color: #1a1a1a;
+  font-weight: 600;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.flashcard-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 28px;
 }
 
 .listen-button {
@@ -463,7 +483,7 @@ textarea:focus-visible,
   align-items: center;
   justify-content: center;
   gap: 10px;
-  margin: 0 auto 28px;
+  margin: 0;
   padding: 0 22px;
   border: 0;
   border-radius: 999px;
@@ -527,15 +547,6 @@ textarea:focus-visible,
 .secondary-button:hover {
   border-color: #b7c8f5;
   background: #f5f8ff;
-}
-
-.answer-container {
-  padding: 14px 16px;
-  border-radius: 11px;
-  background: #f1f8f2;
-  color: #245c32;
-  line-height: 1.6;
-  text-align: center;
 }
 
 .next-flashcard-button {

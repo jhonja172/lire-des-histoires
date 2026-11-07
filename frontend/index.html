@@ -104,15 +104,17 @@
         <article id="flashcard-panel" class="flashcard-panel" hidden>
           <p class="eyebrow">Frase en francés</p>
           <p id="flashcard-french" class="flashcard-french"></p>
-          <button id="flashcard-audio-button" class="listen-button" type="button">
-            <span aria-hidden="true">▶</span> Escuchar audio
-          </button>
+          <div id="answer-container" class="answer-container" hidden></div>
+          <div class="flashcard-action-row">
+            <button id="flashcard-audio-button" class="listen-button" type="button">
+              <span aria-hidden="true">▶</span> Escuchar audio
+            </button>
+            <button id="show-answer-btn" class="secondary-button" type="button">Ver respuesta</button>
+          </div>
           <form id="flashcard-answer-form" class="flashcard-answer-form">
             <label for="flashcard-answer">¿Qué significa en español?</label>
             <textarea id="flashcard-answer" rows="3" placeholder="Escribe el significado…"></textarea>
             <button id="flashcard-submit-button" class="primary-button" type="submit">Enviar respuesta</button>
-            <button id="show-answer-btn" class="secondary-button" type="button">Ver respuesta</button>
-            <div id="answer-container" class="answer-container" hidden></div>
             <button id="next-flashcard-btn" class="primary-button next-flashcard-button" type="button" hidden>
               Siguiente flashcard
             </button>
