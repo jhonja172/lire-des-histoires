@@ -38,8 +38,8 @@ export function startKaraoke(wordBoundaries, wordElements) {
     }
 
     if (nextActiveWordIndex !== activeWordIndex) {
-      if (activeWordIndex >= 0) {
-        wordElements[activeWordIndex]?.classList.remove("word-highlight");
+      for (const wordElement of wordElements) {
+        wordElement.classList.remove("word-highlight");
       }
       wordElements[nextActiveWordIndex]?.classList.add("word-highlight");
       activeWordIndex = nextActiveWordIndex;

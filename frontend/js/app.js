@@ -190,7 +190,7 @@ async function lookupWord(wordElement) {
 
 function createWordElement(value) {
   const word = document.createElement("span");
-  word.className = "story-word";
+  word.className = "word story-word";
   word.textContent = value;
   word.tabIndex = 0;
   word.setAttribute("role", "button");
