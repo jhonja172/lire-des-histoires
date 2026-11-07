@@ -30,6 +30,7 @@ const dictionaryModal = document.querySelector("#dictionary-modal");
 const modalWord = document.querySelector("#modal-word");
 const modalTranslation = document.querySelector("#modal-translation");
 const closeDictionaryModalButton = document.querySelector("#close-dictionary-modal");
+const saveDictionaryFlashcardButton = document.querySelector("#save-dictionary-flashcard-button");
 const flashcardPanel = document.querySelector("#flashcard-panel");
 const flashcardCount = document.querySelector("#flashcard-count");
 const flashcardFrench = document.querySelector("#flashcard-french");
@@ -58,6 +59,7 @@ let flashcardAudioUrl = null;
 let stopKaraoke = () => {};
 let translationController = null;
 let wordLookupController = null;
+let currentDictionaryLine = null;
 
 async function readApiError(response) {
   const body = await response.text();
@@ -187,9 +189,12 @@ async function lookupWord(wordElement) {
     return;
   }
 
+  currentDictionaryLine = wordElement.closest(".reader-line");
   wordLookupController?.abort();
   const controller = new AbortController();
   wordLookupController = controller;
+  saveDictionaryFlashcardButton.disabled = !currentDictionaryLine;
+  saveDictionaryFlashcardButton.textContent = "Guardar para estudiar";
   modalWord.textContent = word;
   modalTranslation.textContent = "Buscando traducción…";
   dictionaryModal.hidden = false;
@@ -206,6 +211,46 @@ async function lookupWord(wordElement) {
         ? error.message
         : "No se pudo consultar la palabra.";
     }
+  }
+}
+
+async function saveDictionaryFlashcard() {
+  if (!currentDictionaryLine) {
+    setStatus("No se encontró la línea de la palabra seleccionada.", true);
+    return;
+  }
+
+  const french = currentDictionaryLine.dataset.frenchText;
+  const translation = currentDictionaryLine.querySelector(".line-translation");
+  let spanish = translation?.textContent.trim() ?? "";
+  if (!spanish || spanish === "Pulsa «Traducir» para ver la traducción." || spanish === "No se pudo cargar la traducción.") {
+    saveDictionaryFlashcardButton.disabled = true;
+    saveDictionaryFlashcardButton.textContent = "Traduciendo…";
+    try {
+      spanish = await translateText(french);
+      if (translation) {
+        translation.textContent = spanish;
+      }
+    } catch (error) {
+      saveDictionaryFlashcardButton.disabled = false;
+      saveDictionaryFlashcardButton.textContent = "Guardar para estudiar";
+      modalTranslation.textContent = error instanceof Error
+        ? error.message
+        : "No se pudo traducir la frase.";
+      return;
+    }
+  }
+
+  saveDictionaryFlashcardButton.disabled = true;
+  saveDictionaryFlashcardButton.textContent = "Guardando…";
+  try {
+    await saveFlashcard(french, spanish);
+    closeDictionaryModal();
+    setStatus("Frase guardada para estudiar.");
+  } catch (error) {
+    saveDictionaryFlashcardButton.disabled = false;
+    saveDictionaryFlashcardButton.textContent = "Guardar para estudiar";
+    setStatus(error instanceof Error ? error.message : "No se pudo guardar la frase.", true);
   }
 }
 
@@ -249,11 +294,9 @@ async function translateReaderLines(signal) {
     }
 
     const frenchText = line.dataset.frenchText;
-    const translation = line.querySelector(".line-translation-text");
-    const saveButton = line.querySelector(".save-flashcard-button");
+    const translation = line.querySelector(".line-translation");
     try {
       translation.textContent = await translateText(frenchText, signal);
-      saveButton.disabled = false;
     } catch (error) {
       if (signal.aborted) {
         break;
@@ -322,21 +365,10 @@ function openStory(story) {
     french.className = "line-french";
     renderFrenchLine(french, text, wordElements);
 
-    const translation = document.createElement("div");
+    const translation = document.createElement("p");
     translation.className = "line-translation";
-    const translationText = document.createElement("span");
-    translationText.className = "line-translation-text";
-    translationText.textContent = "Pulsa «Traducir» para ver la traducción.";
-    translationText.setAttribute("aria-live", "polite");
-    const saveButton = document.createElement("button");
-    saveButton.type = "button";
-    saveButton.className = "save-flashcard-button";
-    saveButton.textContent = "☆ Guardar";
-    saveButton.disabled = true;
-    saveButton.addEventListener("click", () => {
-      void saveReaderFlashcard(text, translationText.textContent, saveButton);
-    });
-    translation.append(translationText, saveButton);
+    translation.textContent = "Pulsa «Traducir» para ver la traducción.";
+    translation.setAttribute("aria-live", "polite");
 
     line.append(french, translation);
     readerLines.append(line);
@@ -345,24 +377,6 @@ function openStory(story) {
   translationController = new AbortController();
   showScreen("reader");
   setStatus("");
-}
-
-async function saveReaderFlashcard(french, spanish, button) {
-  if (!spanish || spanish === "Pulsa «Traducir» para ver la traducción.") {
-    return;
-  }
-
-  button.disabled = true;
-  button.textContent = "Guardando…";
-  try {
-    await saveFlashcard(french, spanish);
-    button.textContent = "✓ Guardada";
-    setStatus("Frase guardada en tus flashcards.");
-  } catch (error) {
-    button.disabled = false;
-    button.textContent = "☆ Guardar";
-    setStatus(error instanceof Error ? error.message : "No se pudo guardar la frase.", true);
-  }
 }
 
 function stopFlashcardAudio() {
@@ -448,6 +462,7 @@ async function playFlashcardAudio() {
 function closeDictionaryModal() {
   wordLookupController?.abort();
   dictionaryModal.hidden = true;
+  currentDictionaryLine = null;
 }
 
 function setPlayingState(isPlaying) {
@@ -593,6 +608,9 @@ flashcardAnswerForm.addEventListener("submit", (event) => {
     return;
   }
   flashcardFeedback.textContent = "La validación de respuestas estará disponible próximamente.";
+});
+saveDictionaryFlashcardButton.addEventListener("click", () => {
+  void saveDictionaryFlashcard();
 });
 translateButton.addEventListener("click", () => {
   translationController?.abort();

@@ -407,37 +407,12 @@ textarea:focus-visible,
 }
 
 .line-translation {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  display: block;
   min-height: 1.4em;
   margin: 0;
   color: #7a8496;
   font-size: 0.91rem;
   line-height: 1.65;
-}
-
-.line-translation-text {
-  min-width: 0;
-  flex: 1;
-}
-
-.save-flashcard-button {
-  flex: 0 0 auto;
-  padding: 5px 9px;
-  border: 1px solid #dce5f5;
-  border-radius: 8px;
-  background: #fff;
-  color: #2563eb;
-  font-size: 0.8rem;
-  font-weight: 600;
-  transition: background-color 140ms ease, border-color 140ms ease;
-}
-
-.save-flashcard-button:not(:disabled):hover {
-  border-color: #a9bef5;
-  background: #f5f8ff;
 }
 
 .flashcards-screen {
@@ -619,9 +594,13 @@ textarea:focus-visible,
 
 .modal-translation {
   min-height: 1.5em;
-  margin: 0;
+  margin: 0 0 20px;
   color: #64748b;
   line-height: 1.6;
+}
+
+.save-dictionary-flashcard-button {
+  width: 100%;
 }
 
 .form-panel {
@@ -725,7 +704,4 @@ button:disabled {
     font-size: 0.82rem;
   }
 
-  .line-translation {
-    align-items: flex-start;
-  }
 }
