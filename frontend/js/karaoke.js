@@ -1,5 +1,5 @@
 export function startKaraoke(wordBoundaries, wordSpans) {
-  const audioPlayer = window.audioPlayer;
+  const audioPlayer = document.getElementById("player");
   if (!audioPlayer) {
     throw new Error("El reproductor de audio no está disponible.");
   }
@@ -28,9 +28,9 @@ export function startKaraoke(wordBoundaries, wordSpans) {
     }
 
     let activeWordIndex = -1;
-    const currentTime = window.audioPlayer.currentTime;
+    const currentTime = audioPlayer.currentTime;
     for (let index = 0; index < wordBoundaries.length; index += 1) {
-      if (wordBoundaries[index].start <= currentTime) {
+      if (wordBoundaries[index].start < currentTime) {
         activeWordIndex = index;
       }
     }

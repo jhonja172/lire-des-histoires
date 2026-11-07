@@ -23,8 +23,11 @@ const dictionaryModal = document.querySelector("#dictionary-modal");
 const modalWord = document.querySelector("#modal-word");
 const modalTranslation = document.querySelector("#modal-translation");
 const closeDictionaryModalButton = document.querySelector("#close-dictionary-modal");
-window.audioPlayer = document.getElementById("player");
-const audioPlayer = window.audioPlayer;
+const audioPlayer = document.getElementById("player");
+if (!audioPlayer) {
+  throw new Error("No se encontró el reproductor de audio.");
+}
+window.audioPlayer = audioPlayer;
 
 let stories = [];
 let currentStoryText = "";
