@@ -561,6 +561,16 @@ textarea:focus-visible,
   text-align: center;
 }
 
+.flashcard-feedback[data-state="correct"] {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.flashcard-feedback[data-state="incorrect"] {
+  color: #b42318;
+  font-weight: 600;
+}
+
 .story-word {
   display: inline;
   padding: 1px 2px;

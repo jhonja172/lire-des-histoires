@@ -31,6 +31,12 @@ class FlashcardRequest(BaseModel):
     paragraph: str = Field(..., min_length=1, max_length=5000)
 
 
+class FlashcardValidationRequest(BaseModel):
+    user_answer: str = Field(..., min_length=1, max_length=2000)
+    correct_answer: str = Field(..., min_length=1, max_length=2000)
+    original_text: str = Field(..., min_length=1, max_length=2000)
+
+
 @app.get("/")
 def read_root():
     return {"message": "Backend de Lire des Histoires listo"}
@@ -128,6 +134,63 @@ async def generate_flashcard(request: FlashcardRequest):
         "frase_francesa": french.strip(),
         "traduccion_espanola": spanish.strip(),
     }
+
+
+@app.post("/api/validate_flashcard")
+async def validate_flashcard(request: FlashcardValidationRequest):
+    user_answer = request.user_answer.strip()
+    correct_answer = request.correct_answer.strip()
+    original_text = request.original_text.strip()
+    if not user_answer or not correct_answer or not original_text:
+        raise HTTPException(
+            status_code=400,
+            detail="La respuesta del usuario, la respuesta correcta y la frase original son requeridas.",
+        )
+
+    prompt = (
+        f"Compara la respuesta del usuario ({user_answer}) con la respuesta correcta "
+        f"({correct_answer}) para la frase en francés ({original_text}). Evalúa si el "
+        "significado es equivalente, aunque cambie la redacción. Responde solo con un "
+        'JSON que tenga la clave "is_correct" (true/false) y una clave "feedback" con '
+        "un mensaje breve de retroalimentación en español."
+    )
+
+    try:
+        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        response = await run_in_threadpool(
+            lambda: client.models.generate_content(
+                model="gemini-3.5-flash-lite",
+                contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+        )
+    except Exception as error:
+        print(f"Error validando flashcard con Gemini: {error}")
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo validar la respuesta.",
+        ) from error
+
+    if not response.text:
+        raise HTTPException(status_code=502, detail="Gemini no devolvió una validación.")
+
+    try:
+        result = json.loads(response.text)
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini devolvió una validación con formato JSON inválido.",
+        ) from error
+
+    is_correct = result.get("is_correct") if isinstance(result, dict) else None
+    feedback = result.get("feedback") if isinstance(result, dict) else None
+    if not isinstance(is_correct, bool) or not isinstance(feedback, str) or not feedback.strip():
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini no devolvió el resultado y la retroalimentación requeridos.",
+        )
+
+    return {"is_correct": is_correct, "feedback": feedback.strip()}
 
 
 @app.post("/api/translate")

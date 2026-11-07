@@ -36,6 +36,7 @@ const flashcardCount = document.querySelector("#flashcard-count");
 const flashcardFrench = document.querySelector("#flashcard-french");
 const flashcardAudioButton = document.querySelector("#flashcard-audio-button");
 const flashcardAnswerForm = document.querySelector("#flashcard-answer-form");
+const flashcardSubmitButton = document.querySelector("#flashcard-submit-button");
 const flashcardAnswer = document.querySelector("#flashcard-answer");
 const showAnswerButton = document.querySelector("#show-answer-btn");
 const answerContainer = document.querySelector("#answer-container");
@@ -101,6 +102,23 @@ async function postFlashcardApi(word, paragraph) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ word, paragraph }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+  return response.json();
+}
+
+async function postFlashcardValidation(userAnswer, correctAnswer, originalText) {
+  const response = await fetch(`${API_URL}/api/validate_flashcard`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_answer: userAnswer,
+      correct_answer: correctAnswer,
+      original_text: originalText,
+    }),
   });
 
   if (!response.ok) {
@@ -413,7 +431,11 @@ function renderCurrentFlashcard() {
     : "";
   flashcardFrench.textContent = flashcard?.frase_francesa ?? "";
   flashcardAnswer.value = "";
+  flashcardAnswer.disabled = false;
+  flashcardSubmitButton.disabled = false;
+  flashcardSubmitButton.textContent = "Enviar respuesta";
   flashcardFeedback.textContent = "";
+  flashcardFeedback.removeAttribute("data-state");
   answerContainer.textContent = flashcard?.traduccion_espanola ?? "";
   answerContainer.hidden = true;
   showAnswerButton.hidden = !flashcard;
@@ -619,15 +641,49 @@ storyForm.addEventListener("submit", async (event) => {
 
 playButton.addEventListener("click", playStory);
 flashcardAudioButton.addEventListener("click", playFlashcardAudio);
-flashcardAnswerForm.addEventListener("submit", (event) => {
+flashcardAnswerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!flashcardAnswer.value.trim()) {
+  const flashcard = flashcards[currentFlashcardIndex];
+  const userAnswer = flashcardAnswer.value.trim();
+  if (!flashcard) {
+    flashcardFeedback.textContent = "No hay una flashcard seleccionada.";
+    flashcardFeedback.dataset.state = "incorrect";
+    return;
+  }
+  if (!userAnswer) {
     flashcardFeedback.textContent = "Escribe tu respuesta en español.";
+    flashcardFeedback.dataset.state = "incorrect";
     flashcardAnswer.focus();
     return;
   }
-  flashcardFeedback.textContent = "La validación de respuestas estará disponible próximamente.";
-  nextFlashcardButton.hidden = false;
+
+  flashcardSubmitButton.disabled = true;
+  flashcardSubmitButton.textContent = "Validando…";
+  flashcardFeedback.textContent = "Gemini está revisando tu respuesta…";
+  flashcardFeedback.removeAttribute("data-state");
+  try {
+    const result = await postFlashcardValidation(
+      userAnswer,
+      flashcard.traduccion_espanola,
+      flashcard.frase_francesa,
+    );
+    if (typeof result?.is_correct !== "boolean" || typeof result?.feedback !== "string") {
+      throw new Error("El servidor devolvió una validación inválida.");
+    }
+
+    flashcardFeedback.textContent = result.feedback;
+    flashcardFeedback.dataset.state = result.is_correct ? "correct" : "incorrect";
+    flashcardAnswer.disabled = true;
+    flashcardSubmitButton.textContent = "Respuesta enviada";
+    nextFlashcardButton.hidden = false;
+  } catch (error) {
+    flashcardSubmitButton.disabled = false;
+    flashcardSubmitButton.textContent = "Enviar respuesta";
+    flashcardFeedback.textContent = error instanceof Error
+      ? error.message
+      : "No se pudo validar la respuesta.";
+    flashcardFeedback.dataset.state = "incorrect";
+  }
 });
 showAnswerButton.addEventListener("click", () => {
   const flashcard = flashcards[currentFlashcardIndex];
@@ -638,7 +694,6 @@ showAnswerButton.addEventListener("click", () => {
   answerContainer.textContent = flashcard.traduccion_espanola;
   answerContainer.hidden = false;
   showAnswerButton.hidden = true;
-  nextFlashcardButton.hidden = false;
 });
 nextFlashcardButton.addEventListener("click", () => {
   if (!flashcards.length) {
