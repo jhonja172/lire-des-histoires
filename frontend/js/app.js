@@ -1,14 +1,21 @@
 import { getStories, saveStory } from "./storage.js";
 import { startKaraoke } from "./karaoke.js";
+import { getFlashcards, saveFlashcard } from "./supabase.js";
 
 const API_URL = "https://lire-des-histoires.onrender.com";
+const homeScreen = document.querySelector("#home-screen");
 const libraryScreen = document.querySelector("#library-screen");
 const readerScreen = document.querySelector("#reader-screen");
 const addScreen = document.querySelector("#add-screen");
+const flashcardsScreen = document.querySelector("#flashcards-screen");
 const storyList = document.querySelector("#story-list");
 const emptyLibrary = document.querySelector("#empty-library");
 const statusMessage = document.querySelector("#status-message");
+const openLibraryButton = document.querySelector("#open-library-button");
+const openFlashcardsButton = document.querySelector("#open-flashcards-button");
 const addTextButton = document.querySelector("#add-text-button");
+const backHomeFromLibraryButton = document.querySelector("#back-home-from-library");
+const backHomeFromFlashcardsButton = document.querySelector("#back-home-from-flashcards");
 const backToLibraryButton = document.querySelector("#back-to-library");
 const cancelAddButton = document.querySelector("#cancel-add-button");
 const storyForm = document.querySelector("#story-form");
@@ -23,6 +30,14 @@ const dictionaryModal = document.querySelector("#dictionary-modal");
 const modalWord = document.querySelector("#modal-word");
 const modalTranslation = document.querySelector("#modal-translation");
 const closeDictionaryModalButton = document.querySelector("#close-dictionary-modal");
+const flashcardPanel = document.querySelector("#flashcard-panel");
+const flashcardCount = document.querySelector("#flashcard-count");
+const flashcardFrench = document.querySelector("#flashcard-french");
+const flashcardAudioButton = document.querySelector("#flashcard-audio-button");
+const flashcardAnswerForm = document.querySelector("#flashcard-answer-form");
+const flashcardAnswer = document.querySelector("#flashcard-answer");
+const flashcardFeedback = document.querySelector("#flashcard-feedback");
+const flashcardsEmpty = document.querySelector("#flashcards-empty");
 const audioPlayer = document.getElementById("player");
 if (!audioPlayer) {
   throw new Error("No se encontró el reproductor de audio.");
@@ -37,6 +52,9 @@ let currentAudioBase64 = null;
 let currentWordBoundaries = [];
 window.wordBoundaries = currentWordBoundaries;
 let wordElements = [];
+let flashcards = [];
+let currentFlashcardIndex = 0;
+let flashcardAudioUrl = null;
 let stopKaraoke = () => {};
 let translationController = null;
 let wordLookupController = null;
@@ -96,9 +114,11 @@ async function translateText(text, parentSignal) {
 }
 
 function showScreen(screenName) {
+  homeScreen.hidden = screenName !== "home";
   libraryScreen.hidden = screenName !== "library";
   readerScreen.hidden = screenName !== "reader";
   addScreen.hidden = screenName !== "add";
+  flashcardsScreen.hidden = screenName !== "flashcards";
 }
 
 function setStatus(message, isError = false) {
@@ -229,9 +249,11 @@ async function translateReaderLines(signal) {
     }
 
     const frenchText = line.dataset.frenchText;
-    const translation = line.querySelector(".line-translation");
+    const translation = line.querySelector(".line-translation-text");
+    const saveButton = line.querySelector(".save-flashcard-button");
     try {
       translation.textContent = await translateText(frenchText, signal);
+      saveButton.disabled = false;
     } catch (error) {
       if (signal.aborted) {
         break;
@@ -269,6 +291,7 @@ function stopCurrentAudio() {
   currentAudioBase64 = null;
   currentWordBoundaries = [];
   window.wordBoundaries = currentWordBoundaries;
+  wordElements = [];
   playButton.setAttribute("aria-label", "Reproducir");
   playButton.setAttribute("aria-pressed", "false");
   playButton.querySelector("span").textContent = "▶";
@@ -299,10 +322,21 @@ function openStory(story) {
     french.className = "line-french";
     renderFrenchLine(french, text, wordElements);
 
-    const translation = document.createElement("p");
+    const translation = document.createElement("div");
     translation.className = "line-translation";
-    translation.textContent = "Pulsa «Traducir» para ver la traducción.";
-    translation.setAttribute("aria-live", "polite");
+    const translationText = document.createElement("span");
+    translationText.className = "line-translation-text";
+    translationText.textContent = "Pulsa «Traducir» para ver la traducción.";
+    translationText.setAttribute("aria-live", "polite");
+    const saveButton = document.createElement("button");
+    saveButton.type = "button";
+    saveButton.className = "save-flashcard-button";
+    saveButton.textContent = "☆ Guardar";
+    saveButton.disabled = true;
+    saveButton.addEventListener("click", () => {
+      void saveReaderFlashcard(text, translationText.textContent, saveButton);
+    });
+    translation.append(translationText, saveButton);
 
     line.append(french, translation);
     readerLines.append(line);
@@ -311,6 +345,104 @@ function openStory(story) {
   translationController = new AbortController();
   showScreen("reader");
   setStatus("");
+}
+
+async function saveReaderFlashcard(french, spanish, button) {
+  if (!spanish || spanish === "Pulsa «Traducir» para ver la traducción.") {
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Guardando…";
+  try {
+    await saveFlashcard(french, spanish);
+    button.textContent = "✓ Guardada";
+    setStatus("Frase guardada en tus flashcards.");
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = "☆ Guardar";
+    setStatus(error instanceof Error ? error.message : "No se pudo guardar la frase.", true);
+  }
+}
+
+function stopFlashcardAudio() {
+  if (!flashcardAudioUrl) {
+    return;
+  }
+
+  audioPlayer.pause();
+  audioPlayer.removeAttribute("src");
+  audioPlayer.load();
+  URL.revokeObjectURL(flashcardAudioUrl);
+  flashcardAudioUrl = null;
+}
+
+function renderCurrentFlashcard() {
+  const flashcard = flashcards[currentFlashcardIndex];
+  flashcardsEmpty.hidden = Boolean(flashcard);
+  flashcardPanel.hidden = !flashcard;
+  flashcardCount.textContent = flashcard
+    ? `Frase ${currentFlashcardIndex + 1} de ${flashcards.length}`
+    : "";
+  flashcardFrench.textContent = flashcard?.frase_francesa ?? "";
+  flashcardAnswer.value = "";
+  flashcardFeedback.textContent = "";
+}
+
+async function openFlashcards() {
+  translationController?.abort();
+  closeDictionaryModal();
+  stopCurrentAudio();
+  if (currentAudioUrl) {
+    URL.revokeObjectURL(currentAudioUrl);
+    currentAudioUrl = null;
+  }
+  stopFlashcardAudio();
+  audioPlayer.removeAttribute("src");
+  audioPlayer.load();
+  showScreen("flashcards");
+  flashcards = [];
+  currentFlashcardIndex = 0;
+  renderCurrentFlashcard();
+  setStatus("Cargando flashcards…");
+
+  try {
+    flashcards = await getFlashcards();
+    renderCurrentFlashcard();
+    setStatus(flashcards.length ? "" : "Guarda frases traducidas desde la biblioteca para estudiar.");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : "No se pudieron cargar las flashcards.", true);
+  }
+}
+
+async function playFlashcardAudio() {
+  const flashcard = flashcards[currentFlashcardIndex];
+  if (!flashcard) {
+    return;
+  }
+
+  flashcardAudioButton.disabled = true;
+  setStatus("Preparando audio…");
+  try {
+    const result = await postApi("/api/audio", flashcard.frase_francesa);
+    if (typeof result?.audio_base64 !== "string") {
+      throw new Error("El servidor no devolvió audio válido.");
+    }
+
+    stopFlashcardAudio();
+    const binary = atob(result.audio_base64);
+    const audioBytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    flashcardAudioUrl = URL.createObjectURL(
+      new Blob([audioBytes], { type: "audio/mpeg" }),
+    );
+    audioPlayer.src = flashcardAudioUrl;
+    await audioPlayer.play();
+    setStatus("");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : "No se pudo reproducir la frase.", true);
+  } finally {
+    flashcardAudioButton.disabled = false;
+  }
 }
 
 function closeDictionaryModal() {
@@ -386,6 +518,24 @@ async function playStory() {
   }
 }
 
+openLibraryButton.addEventListener("click", () => {
+  stopFlashcardAudio();
+  showScreen("library");
+  void loadStories();
+});
+openFlashcardsButton.addEventListener("click", () => {
+  void openFlashcards();
+});
+backHomeFromLibraryButton.addEventListener("click", () => {
+  stopFlashcardAudio();
+  showScreen("home");
+  setStatus("");
+});
+backHomeFromFlashcardsButton.addEventListener("click", () => {
+  stopFlashcardAudio();
+  showScreen("home");
+  setStatus("");
+});
 addTextButton.addEventListener("click", () => {
   showScreen("add");
   storyText.focus();
@@ -396,7 +546,9 @@ backToLibraryButton.addEventListener("click", () => {
   wordLookupController?.abort();
   closeDictionaryModal();
   stopCurrentAudio();
+  stopFlashcardAudio();
   showScreen("library");
+  void loadStories();
   setStatus("");
 });
 
@@ -432,6 +584,16 @@ storyForm.addEventListener("submit", async (event) => {
 });
 
 playButton.addEventListener("click", playStory);
+flashcardAudioButton.addEventListener("click", playFlashcardAudio);
+flashcardAnswerForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!flashcardAnswer.value.trim()) {
+    flashcardFeedback.textContent = "Escribe tu respuesta en español.";
+    flashcardAnswer.focus();
+    return;
+  }
+  flashcardFeedback.textContent = "La validación de respuestas estará disponible próximamente.";
+});
 translateButton.addEventListener("click", () => {
   translationController?.abort();
   translationController = new AbortController();
@@ -470,9 +632,10 @@ document.querySelector(".brand").addEventListener("click", (event) => {
   translationController?.abort();
   closeDictionaryModal();
   stopCurrentAudio();
-  showScreen("library");
+  stopFlashcardAudio();
+  showScreen("home");
   setStatus("");
 });
 
-setStatus("Cargando biblioteca…");
-loadStories();
+showScreen("home");
+setStatus("");

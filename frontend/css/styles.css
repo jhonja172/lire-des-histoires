@@ -73,6 +73,141 @@ select {
   padding-top: 40px;
 }
 
+.home-screen {
+  width: min(100%, 680px);
+  margin: 0 auto;
+  padding-top: clamp(36px, 8vh, 76px);
+}
+
+.home-greeting {
+  margin-bottom: 10px;
+  color: #2563eb;
+}
+
+.home-title {
+  max-width: 560px;
+  margin-bottom: 26px;
+  font-size: clamp(2rem, 6vw, 3rem);
+  line-height: 1.12;
+}
+
+.progress-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px 20px;
+  margin-bottom: 22px;
+  padding: 22px;
+  border: 1px solid #e8ebf0;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 26px rgb(23 32 51 / 5%);
+}
+
+.progress-card .eyebrow {
+  margin-bottom: 8px;
+}
+
+.progress-count {
+  margin: 0;
+  color: #64748b;
+}
+
+.progress-count strong {
+  color: #172033;
+  font-size: 1.35rem;
+}
+
+.progress-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #fff5d6;
+  color: #d89000;
+  font-size: 1.4rem;
+  place-items: center;
+}
+
+.progress-track {
+  height: 9px;
+  overflow: hidden;
+  grid-column: 1 / -1;
+  border-radius: 99px;
+  background: #edf1f7;
+}
+
+.progress-track span {
+  display: block;
+  width: 12%;
+  height: 100%;
+  border-radius: inherit;
+  background: #2563eb;
+}
+
+.practice-menu {
+  display: grid;
+  gap: 14px;
+}
+
+.practice-card {
+  display: flex;
+  min-height: 112px;
+  align-items: center;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid #e8ebf0;
+  border-radius: 18px;
+  color: #172033;
+  text-align: left;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.practice-card:hover {
+  transform: translateY(-2px);
+  border-color: #bfcef9;
+  box-shadow: 0 10px 24px rgb(23 32 51 / 7%);
+}
+
+.library-card {
+  background: #eef4ff;
+}
+
+.flashcards-card {
+  background: #f2f8ee;
+}
+
+.practice-icon {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 auto;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 75%);
+  font-size: 1.65rem;
+  place-items: center;
+}
+
+.practice-card-copy {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+}
+
+.practice-card-copy strong {
+  font-size: 1.08rem;
+}
+
+.practice-card-copy span {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.practice-arrow {
+  color: #64748b;
+  font-size: 1.35rem;
+}
+
 .page-heading {
   display: flex;
   align-items: center;
@@ -272,11 +407,142 @@ textarea:focus-visible,
 }
 
 .line-translation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-height: 1.4em;
   margin: 0;
   color: #7a8496;
   font-size: 0.91rem;
   line-height: 1.65;
+}
+
+.line-translation-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.save-flashcard-button {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid #dce5f5;
+  border-radius: 8px;
+  background: #fff;
+  color: #2563eb;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.save-flashcard-button:not(:disabled):hover {
+  border-color: #a9bef5;
+  background: #f5f8ff;
+}
+
+.flashcards-screen {
+  width: min(100%, 680px);
+  margin: 0 auto;
+}
+
+.flashcards-heading {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.flashcards-heading h1 {
+  margin-bottom: 8px;
+}
+
+.flashcard-count {
+  margin: 0;
+  color: #7a8496;
+  font-size: 0.9rem;
+}
+
+.flashcard-panel {
+  padding: clamp(22px, 6vw, 38px);
+  border: 1px solid #e8ebf0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(23 32 51 / 6%);
+}
+
+.flashcard-panel > .eyebrow {
+  text-align: center;
+}
+
+.flashcard-french {
+  min-height: 2.4em;
+  margin: 0 auto 22px;
+  color: #172033;
+  font-size: clamp(1.35rem, 4vw, 1.8rem);
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.listen-button {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 auto 28px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+
+.listen-button:hover {
+  background: #1d4ed8;
+}
+
+.listen-button:active {
+  transform: translateY(1px);
+}
+
+.flashcard-answer-form {
+  display: grid;
+  gap: 11px;
+}
+
+.flashcard-answer-form label {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.flashcard-answer-form textarea {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  padding: 13px 14px;
+  border: 1px solid #dce2eb;
+  border-radius: 11px;
+  color: #263248;
+  line-height: 1.6;
+}
+
+.flashcard-answer-form textarea:focus-visible {
+  outline: 3px solid rgb(37 99 235 / 20%);
+  outline-offset: 2px;
+}
+
+.flashcard-answer-form .primary-button {
+  justify-self: center;
+  margin-top: 5px;
+}
+
+.flashcard-feedback {
+  min-height: 1.3em;
+  margin: 0;
+  color: #64748b;
+  font-size: 0.88rem;
+  text-align: center;
 }
 
 .story-word {
@@ -443,5 +709,23 @@ button:disabled {
 
   .reader-line {
     padding: 15px 14px;
+  }
+
+  .practice-card {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .practice-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .practice-card-copy span {
+    font-size: 0.82rem;
+  }
+
+  .line-translation {
+    align-items: flex-start;
   }
 }

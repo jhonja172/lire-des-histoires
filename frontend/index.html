@@ -9,7 +9,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
-    <script type="module" src="js/app.js"></script>
   </head>
   <body>
     <main class="app-shell">
@@ -19,7 +18,43 @@
 
       <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
 
-      <section id="library-screen" class="screen" aria-labelledby="library-title">
+      <section id="home-screen" class="screen home-screen" aria-labelledby="home-title">
+        <p class="eyebrow home-greeting">Bonjour</p>
+        <h1 id="home-title" class="home-title">¿Qué quieres practicar hoy?</h1>
+        <article class="progress-card">
+          <div>
+            <p class="eyebrow">Tu progreso</p>
+            <p class="progress-count"><strong>120</strong> de 1000 frases</p>
+          </div>
+          <span class="progress-icon" aria-hidden="true">✦</span>
+          <div class="progress-track" role="progressbar" aria-label="Progreso de aprendizaje" aria-valuenow="12" aria-valuemin="0" aria-valuemax="100">
+            <span></span>
+          </div>
+        </article>
+        <nav class="practice-menu" aria-label="Actividades de aprendizaje">
+          <button id="open-library-button" class="practice-card library-card" type="button">
+            <span class="practice-icon" aria-hidden="true">📚</span>
+            <span class="practice-card-copy">
+              <strong>Biblioteca</strong>
+              <span>Lee y escucha tus historias</span>
+            </span>
+            <span class="practice-arrow" aria-hidden="true">→</span>
+          </button>
+          <button id="open-flashcards-button" class="practice-card flashcards-card" type="button">
+            <span class="practice-icon" aria-hidden="true">💡</span>
+            <span class="practice-card-copy">
+              <strong>Flashcards</strong>
+              <span>Repasa las frases que guardaste</span>
+            </span>
+            <span class="practice-arrow" aria-hidden="true">→</span>
+          </button>
+        </nav>
+      </section>
+
+      <section id="library-screen" class="screen" aria-labelledby="library-title" hidden>
+        <button id="back-home-from-library" class="text-button back-button" type="button">
+          <span aria-hidden="true">←</span> Inicio
+        </button>
         <div class="page-heading">
           <div>
             <p class="eyebrow">Tu biblioteca</p>
@@ -56,6 +91,31 @@
         <div id="reader-lines" class="reader-lines"></div>
       </section>
 
+      <section id="flashcards-screen" class="screen flashcards-screen" aria-labelledby="flashcards-title" hidden>
+        <button id="back-home-from-flashcards" class="text-button back-button" type="button">
+          <span aria-hidden="true">←</span> Inicio
+        </button>
+        <div class="flashcards-heading">
+          <p class="eyebrow">Un paso a la vez</p>
+          <h1 id="flashcards-title">Flashcards</h1>
+          <p id="flashcard-count" class="flashcard-count"></p>
+        </div>
+        <article id="flashcard-panel" class="flashcard-panel" hidden>
+          <p class="eyebrow">Frase en francés</p>
+          <p id="flashcard-french" class="flashcard-french"></p>
+          <button id="flashcard-audio-button" class="listen-button" type="button">
+            <span aria-hidden="true">▶</span> Escuchar audio
+          </button>
+          <form id="flashcard-answer-form" class="flashcard-answer-form">
+            <label for="flashcard-answer">¿Qué significa en español?</label>
+            <textarea id="flashcard-answer" rows="3" placeholder="Escribe el significado…"></textarea>
+            <button id="flashcard-submit-button" class="primary-button" type="submit">Enviar respuesta</button>
+            <p id="flashcard-feedback" class="flashcard-feedback" role="status" aria-live="polite"></p>
+          </form>
+        </article>
+        <p id="flashcards-empty" class="empty-state" hidden>Aún no hay frases guardadas. Guarda una traducción desde la biblioteca para empezar.</p>
+      </section>
+
       <section id="add-screen" class="screen" aria-labelledby="add-title" hidden>
         <button id="cancel-add-button" class="text-button back-button" type="button">
           <span aria-hidden="true">←</span> Volver a la biblioteca
@@ -87,5 +147,6 @@
         <p id="modal-translation" class="modal-translation" role="status" aria-live="polite"></p>
       </section>
     </div>
+    <script type="module" src="js/app.js"></script>
   </body>
 </html>
