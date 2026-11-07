@@ -1,4 +1,9 @@
-export function startKaraoke(audio, wordBoundaries, wordSpans) {
+export function startKaraoke(wordBoundaries, wordSpans) {
+  const audioPlayer = window.audioPlayer;
+  if (!audioPlayer) {
+    throw new Error("El reproductor de audio no está disponible.");
+  }
+
   let animationFrameId = null;
 
   const clearHighlights = () => {
@@ -17,13 +22,13 @@ export function startKaraoke(audio, wordBoundaries, wordSpans) {
 
   const syncKaraoke = () => {
     animationFrameId = null;
-    if (audio.paused || audio.ended) {
+    if (audioPlayer.paused || audioPlayer.ended) {
       stopSync();
       return;
     }
 
     let activeWordIndex = -1;
-    const currentTime = audio.currentTime;
+    const currentTime = window.audioPlayer.currentTime;
     for (let index = 0; index < wordBoundaries.length; index += 1) {
       if (wordBoundaries[index].start <= currentTime) {
         activeWordIndex = index;
@@ -36,20 +41,20 @@ export function startKaraoke(audio, wordBoundaries, wordSpans) {
   };
 
   const startSync = () => {
-    if (animationFrameId === null && !audio.paused && !audio.ended) {
+    if (animationFrameId === null && !audioPlayer.paused && !audioPlayer.ended) {
       animationFrameId = requestAnimationFrame(syncKaraoke);
     }
   };
 
-  audio.addEventListener("play", startSync);
-  audio.addEventListener("pause", stopSync);
-  audio.addEventListener("ended", stopSync);
+  audioPlayer.addEventListener("play", startSync);
+  audioPlayer.addEventListener("pause", stopSync);
+  audioPlayer.addEventListener("ended", stopSync);
   startSync();
 
   return () => {
-    audio.removeEventListener("play", startSync);
-    audio.removeEventListener("pause", stopSync);
-    audio.removeEventListener("ended", stopSync);
+    audioPlayer.removeEventListener("play", startSync);
+    audioPlayer.removeEventListener("pause", stopSync);
+    audioPlayer.removeEventListener("ended", stopSync);
     stopSync();
   };
 }

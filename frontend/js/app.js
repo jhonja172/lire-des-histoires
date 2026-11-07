@@ -23,7 +23,8 @@ const dictionaryModal = document.querySelector("#dictionary-modal");
 const modalWord = document.querySelector("#modal-word");
 const modalTranslation = document.querySelector("#modal-translation");
 const closeDictionaryModalButton = document.querySelector("#close-dictionary-modal");
-const audioPlayer = new Audio();
+window.audioPlayer = document.getElementById("player");
+const audioPlayer = window.audioPlayer;
 
 let stories = [];
 let currentStoryText = "";
@@ -362,7 +363,7 @@ async function playStory() {
       audioPlayer.src = currentAudioUrl;
       audioPlayer.currentTime = 0;
       audioPlayer.playbackRate = Number(speedSelect.value);
-      stopKaraoke = startKaraoke(audioPlayer, currentWordBoundaries, wordSpans);
+      stopKaraoke = startKaraoke(currentWordBoundaries, wordSpans);
     }
 
     await audioPlayer.play();
