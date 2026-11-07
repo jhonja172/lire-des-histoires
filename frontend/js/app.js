@@ -35,6 +35,7 @@ let currentAudioText = null;
 let currentAudioUrl = null;
 let currentAudioBase64 = null;
 let currentWordBoundaries = [];
+window.wordBoundaries = currentWordBoundaries;
 let wordElements = [];
 let stopKaraoke = () => {};
 let translationController = null;
@@ -267,6 +268,7 @@ function stopCurrentAudio() {
   currentAudioText = null;
   currentAudioBase64 = null;
   currentWordBoundaries = [];
+  window.wordBoundaries = currentWordBoundaries;
   playButton.setAttribute("aria-label", "Reproducir");
   playButton.setAttribute("aria-pressed", "false");
   playButton.querySelector("span").textContent = "▶";
@@ -363,10 +365,11 @@ async function playStory() {
       currentAudioText = currentStoryText;
       currentAudioBase64 = result.audio_base64;
       currentWordBoundaries = result.word_boundaries;
+      window.wordBoundaries = currentWordBoundaries;
       audioPlayer.src = currentAudioUrl;
       audioPlayer.currentTime = 0;
       audioPlayer.playbackRate = Number(speedSelect.value);
-      stopKaraoke = startKaraoke(currentWordBoundaries, wordElements);
+      stopKaraoke = startKaraoke(wordElements);
     }
 
     await audioPlayer.play();

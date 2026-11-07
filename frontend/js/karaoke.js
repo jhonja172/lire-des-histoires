@@ -1,8 +1,12 @@
-export function startKaraoke(wordBoundaries, wordElements) {
+export function startKaraoke(wordElements) {
   const audioPlayer = document.getElementById("player");
   if (!audioPlayer) {
     throw new Error("El reproductor de audio no está disponible.");
   }
+  if (!Array.isArray(window.wordBoundaries)) {
+    throw new Error("No se encontraron los tiempos de las palabras del audio.");
+  }
+  const wordBoundaries = window.wordBoundaries;
 
   let animationFrameId = null;
   let activeWordIndex = -1;
@@ -22,10 +26,8 @@ export function startKaraoke(wordBoundaries, wordElements) {
     clearHighlights();
   };
 
-  const syncKaraoke = () => {
-    animationFrameId = null;
+  const updateActiveWord = () => {
     if (audioPlayer.paused || audioPlayer.ended) {
-      stopSync();
       return;
     }
 
@@ -44,7 +46,16 @@ export function startKaraoke(wordBoundaries, wordElements) {
       wordElements[nextActiveWordIndex]?.classList.add("word-highlight");
       activeWordIndex = nextActiveWordIndex;
     }
+  };
 
+  const syncKaraoke = () => {
+    animationFrameId = null;
+    if (audioPlayer.paused || audioPlayer.ended) {
+      stopSync();
+      return;
+    }
+
+    updateActiveWord();
     animationFrameId = requestAnimationFrame(syncKaraoke);
   };
 
@@ -55,12 +66,14 @@ export function startKaraoke(wordBoundaries, wordElements) {
   };
 
   audioPlayer.addEventListener("play", startSync);
+  audioPlayer.addEventListener("timeupdate", updateActiveWord);
   audioPlayer.addEventListener("pause", stopSync);
   audioPlayer.addEventListener("ended", stopSync);
   startSync();
 
   return () => {
     audioPlayer.removeEventListener("play", startSync);
+    audioPlayer.removeEventListener("timeupdate", updateActiveWord);
     audioPlayer.removeEventListener("pause", stopSync);
     audioPlayer.removeEventListener("ended", stopSync);
     stopSync();
