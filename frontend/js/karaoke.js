@@ -6,7 +6,6 @@ export function startKaraoke(wordElements) {
   if (!Array.isArray(window.wordBoundaries)) {
     throw new Error("No se encontraron los tiempos de las palabras del audio.");
   }
-  const wordBoundaries = window.wordBoundaries;
 
   let animationFrameId = null;
   let activeWordIndex = -1;
@@ -34,7 +33,11 @@ export function startKaraoke(wordElements) {
 
     let nextActiveWordIndex = -1;
     const currentTime = audioPlayer.currentTime;
-    console.log("Array de tiempos:", window.wordBoundaries);
+    const wordBoundaries = window.wordBoundaries;
+    if (!Array.isArray(wordBoundaries)) {
+      return;
+    }
+    console.log("Array de tiempos:", wordBoundaries);
     for (let index = 0; index < wordBoundaries.length; index += 1) {
       if (currentTime >= wordBoundaries[index].start) {
         nextActiveWordIndex = index;

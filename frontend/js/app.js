@@ -342,10 +342,12 @@ async function playStory() {
       audioPlayer.playbackRate = Number(speedSelect.value);
     } else {
       const result = await postApi("/api/audio", currentStoryText);
-      console.log("Tiempos recibidos:", result.word_boundaries);
+      console.log("Datos recibidos del backend:", result);
+      window.wordBoundaries = result?.word_boundaries;
+      console.log("Tiempos recibidos:", result?.word_boundaries);
       if (
-        typeof result.audio_base64 !== "string"
-        || !Array.isArray(result.word_boundaries)
+        typeof result?.audio_base64 !== "string"
+        || !Array.isArray(result?.word_boundaries)
         || !result.word_boundaries.every((boundary) => (
           typeof boundary?.text === "string"
           && Number.isFinite(boundary.start)
@@ -366,7 +368,6 @@ async function playStory() {
       currentAudioText = currentStoryText;
       currentAudioBase64 = result.audio_base64;
       currentWordBoundaries = result.word_boundaries;
-      window.wordBoundaries = currentWordBoundaries;
       audioPlayer.src = currentAudioUrl;
       audioPlayer.currentTime = 0;
       audioPlayer.playbackRate = Number(speedSelect.value);
