@@ -67,22 +67,6 @@ export async function getFlashcards() {
   return flashcards;
 }
 
-export async function updateFlashcardProgress(id, nivelDominio, proximoRepaso) {
-  const query = new URLSearchParams({ id: `eq.${id}` });
-  const response = await fetch(`${TABLE_URL}?${query}`, {
-    method: "PATCH",
-    headers: getHeaders("return=minimal"),
-    body: JSON.stringify({
-      nivel_dominio: nivelDominio,
-      proximo_repaso: proximoRepaso,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(await readError(response));
-  }
-}
-
 export async function deleteFlashcard(id) {
   const query = new URLSearchParams({ id: `eq.${id}` });
   const response = await fetch(`${TABLE_URL}?${query}`, {

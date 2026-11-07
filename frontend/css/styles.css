@@ -573,10 +573,6 @@ textarea:focus-visible,
   background: #f5f8ff;
 }
 
-.next-flashcard-button {
-  justify-self: center;
-}
-
 .flashcard-feedback {
   min-height: 1.3em;
   margin: 0;
@@ -593,6 +589,47 @@ textarea:focus-visible,
 .flashcard-feedback[data-state="incorrect"] {
   color: #b42318;
   font-weight: 600;
+}
+
+.flashcard-rating-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 6px;
+}
+
+.rating-button {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 600;
+  transition: filter 140ms ease, transform 140ms ease;
+}
+
+.rating-button:hover {
+  filter: brightness(0.92);
+}
+
+.rating-button:active {
+  transform: translateY(1px);
+}
+
+.rating-again {
+  background: #dc2626;
+}
+
+.rating-hard {
+  background: #ea580c;
+}
+
+.rating-good {
+  background: #2563eb;
+}
+
+.rating-easy {
+  background: #16a34a;
 }
 
 .story-word {
@@ -779,4 +816,7 @@ button:disabled {
     font-size: 0.82rem;
   }
 
+  .flashcard-rating-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

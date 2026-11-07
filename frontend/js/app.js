@@ -4,7 +4,6 @@ import {
   deleteFlashcard,
   getFlashcards,
   saveFlashcard,
-  updateFlashcardProgress,
 } from "./supabase.js";
 
 const API_URL = "https://lire-des-histoires.onrender.com";
@@ -42,11 +41,12 @@ const flashcardFrench = document.querySelector("#flashcard-french");
 const deleteFlashcardButton = document.querySelector("#delete-flashcard-button");
 const flashcardAudioButton = document.querySelector("#flashcard-audio-button");
 const flashcardAnswerForm = document.querySelector("#flashcard-answer-form");
+const flashcardAnswerLabel = document.querySelector('label[for="flashcard-answer"]');
 const flashcardSubmitButton = document.querySelector("#flashcard-submit-button");
 const flashcardAnswer = document.querySelector("#flashcard-answer");
 const showAnswerButton = document.querySelector("#show-answer-btn");
 const answerContainer = document.querySelector("#answer-container");
-const nextFlashcardButton = document.querySelector("#next-flashcard-btn");
+const flashcardRatingButtons = document.querySelector("#flashcard-rating-buttons");
 const flashcardFeedback = document.querySelector("#flashcard-feedback");
 const flashcardsEmpty = document.querySelector("#flashcards-empty");
 const audioPlayer = document.getElementById("player");
@@ -125,6 +125,19 @@ async function postFlashcardValidation(userAnswer, correctAnswer, originalText) 
       correct_answer: correctAnswer,
       original_text: originalText,
     }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+  return response.json();
+}
+
+async function postFlashcardSchedule(flashcardId, rating) {
+  const response = await fetch(`${API_URL}/api/schedule_flashcard`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ flashcard_id: flashcardId, rating }),
   });
 
   if (!response.ok) {
@@ -430,6 +443,8 @@ function stopFlashcardAudio() {
 
 function renderCurrentFlashcard() {
   const flashcard = flashcards[currentFlashcardIndex];
+  deleteFlashcardButton.disabled = false;
+  flashcardAudioButton.disabled = false;
   flashcardsEmpty.hidden = Boolean(flashcard);
   flashcardPanel.hidden = !flashcard;
   flashcardCount.textContent = flashcard
@@ -438,23 +453,20 @@ function renderCurrentFlashcard() {
   flashcardFrench.textContent = flashcard?.frase_francesa ?? "";
   flashcardAnswer.value = "";
   flashcardAnswer.disabled = false;
+  flashcardAnswerLabel.hidden = false;
   flashcardSubmitButton.disabled = false;
   flashcardSubmitButton.textContent = "Enviar respuesta";
+  flashcardSubmitButton.hidden = false;
   flashcardFeedback.textContent = "";
   flashcardFeedback.removeAttribute("data-state");
   answerContainer.textContent = flashcard?.traduccion_espanola ?? "";
   answerContainer.hidden = true;
   showAnswerButton.hidden = !flashcard;
   showAnswerButton.disabled = false;
-  nextFlashcardButton.hidden = true;
-}
-
-function getNextReviewDate(masterLevel) {
-  const reviewDays = [0, 1, 3, 7, 14, 30];
-  const daysUntilReview = reviewDays[Math.min(masterLevel, reviewDays.length - 1)];
-  const nextReview = new Date();
-  nextReview.setUTCDate(nextReview.getUTCDate() + daysUntilReview);
-  return nextReview.toISOString();
+  flashcardRatingButtons.hidden = true;
+  for (const ratingButton of flashcardRatingButtons.querySelectorAll("button")) {
+    ratingButton.disabled = false;
+  }
 }
 
 async function removeCurrentFlashcard() {
@@ -711,30 +723,76 @@ flashcardAnswerForm.addEventListener("submit", async (event) => {
       throw new Error("El servidor devolvió una validación inválida.");
     }
 
-    const newMasteryLevel = result.is_correct
-      ? (flashcard.nivel_dominio ?? 0) + 1
-      : 0;
-    const nextReview = result.is_correct
-      ? getNextReviewDate(newMasteryLevel)
-      : new Date().toISOString();
-    await updateFlashcardProgress(
-      flashcard.id,
-      newMasteryLevel,
-      nextReview,
-    );
-    flashcard.nivel_dominio = newMasteryLevel;
-    flashcard.proximo_repaso = nextReview;
     flashcardFeedback.textContent = result.feedback;
     flashcardFeedback.dataset.state = result.is_correct ? "correct" : "incorrect";
     flashcardAnswer.disabled = true;
-    flashcardSubmitButton.textContent = "Respuesta enviada";
-    nextFlashcardButton.hidden = false;
+    flashcardAnswerLabel.hidden = true;
+    flashcardSubmitButton.hidden = true;
+    flashcardRatingButtons.hidden = false;
   } catch (error) {
     flashcardSubmitButton.disabled = false;
     flashcardSubmitButton.textContent = "Enviar respuesta";
     flashcardFeedback.textContent = error instanceof Error
       ? error.message
       : "No se pudo validar la respuesta.";
+    flashcardFeedback.dataset.state = "incorrect";
+  }
+});
+
+flashcardRatingButtons.addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  const rating = Number(target.dataset.rating);
+  const flashcard = flashcards[currentFlashcardIndex];
+  if (!flashcard || !Number.isInteger(rating) || rating < 1 || rating > 4) {
+    return;
+  }
+
+  for (const ratingButton of flashcardRatingButtons.querySelectorAll("button")) {
+    ratingButton.disabled = true;
+  }
+  deleteFlashcardButton.disabled = true;
+  flashcardAudioButton.disabled = true;
+  showAnswerButton.disabled = true;
+  flashcardFeedback.textContent = "Guardando el próximo repaso…";
+  flashcardFeedback.removeAttribute("data-state");
+  try {
+    const result = await postFlashcardSchedule(flashcard.id, rating);
+    if (!Number.isInteger(result?.days_until_review) || result.days_until_review < 0) {
+      throw new Error("El servidor devolvió un intervalo de repaso inválido.");
+    }
+
+    flashcardFeedback.textContent = result.days_until_review === 0
+      ? "La tarjeta vuelve a estar lista para repasar hoy."
+      : `Próximo repaso en ${result.days_until_review} día${result.days_until_review === 1 ? "" : "s"}.`;
+    flashcardFeedback.dataset.state = "correct";
+
+    if (result.days_until_review > 0) {
+      flashcards.splice(currentFlashcardIndex, 1);
+      if (currentFlashcardIndex >= flashcards.length) {
+        currentFlashcardIndex = 0;
+      }
+    } else if (flashcards.length > 1) {
+      currentFlashcardIndex = (currentFlashcardIndex + 1) % flashcards.length;
+    }
+
+    window.setTimeout(() => {
+      renderCurrentFlashcard();
+      setStatus("");
+    }, 1100);
+  } catch (error) {
+    for (const ratingButton of flashcardRatingButtons.querySelectorAll("button")) {
+      ratingButton.disabled = false;
+    }
+    deleteFlashcardButton.disabled = false;
+    flashcardAudioButton.disabled = false;
+    showAnswerButton.disabled = false;
+    flashcardFeedback.textContent = error instanceof Error
+      ? error.message
+      : "No se pudo programar el repaso.";
     flashcardFeedback.dataset.state = "incorrect";
   }
 });
@@ -747,13 +805,6 @@ showAnswerButton.addEventListener("click", () => {
   answerContainer.textContent = flashcard.traduccion_espanola;
   answerContainer.hidden = false;
   showAnswerButton.hidden = true;
-});
-nextFlashcardButton.addEventListener("click", () => {
-  if (!flashcards.length) {
-    return;
-  }
-  currentFlashcardIndex = (currentFlashcardIndex + 1) % flashcards.length;
-  renderCurrentFlashcard();
 });
 saveDictionaryFlashcardButton.addEventListener("click", () => {
   void saveDictionaryFlashcard();

@@ -1,6 +1,12 @@
 import base64
 import json
+import math
 import os
+from datetime import datetime, timedelta, timezone
+from typing import Literal
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request as URLRequest, urlopen
 
 import edge_tts
 from google import genai
@@ -35,6 +41,49 @@ class FlashcardValidationRequest(BaseModel):
     user_answer: str = Field(..., min_length=1, max_length=2000)
     correct_answer: str = Field(..., min_length=1, max_length=2000)
     original_text: str = Field(..., min_length=1, max_length=2000)
+
+
+class FlashcardScheduleRequest(BaseModel):
+    flashcard_id: int = Field(..., gt=0)
+    rating: Literal[1, 2, 3, 4]
+
+
+def supabase_request(path: str, method: str = "GET", payload: dict | None = None) -> bytes:
+    supabase_url = os.environ.get("SUPABASE_URL")
+    service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not service_role_key:
+        raise HTTPException(
+            status_code=500,
+            detail="El backend requiere SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY.",
+        )
+
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = URLRequest(
+        f"{supabase_url.rstrip('/')}/rest/v1/flashcards?{path}",
+        data=body,
+        method=method,
+        headers={
+            "apikey": service_role_key,
+            "Authorization": f"Bearer {service_role_key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        },
+    )
+    try:
+        with urlopen(request, timeout=15) as response:
+            return response.read()
+    except HTTPError as error:
+        print(f"Supabase respondió {error.code} al {method} de flashcard.")
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo actualizar la flashcard en Supabase.",
+        ) from error
+    except URLError as error:
+        print(f"Error de conexión con Supabase: {error.reason}")
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo conectar con Supabase.",
+        ) from error
 
 
 @app.get("/")
@@ -191,6 +240,71 @@ async def validate_flashcard(request: FlashcardValidationRequest):
         )
 
     return {"is_correct": is_correct, "feedback": feedback.strip()}
+
+
+@app.post("/api/schedule_flashcard")
+async def schedule_flashcard(request: FlashcardScheduleRequest):
+    query = urlencode({
+        "id": f"eq.{request.flashcard_id}",
+        "select": "id,nivel_dominio",
+    })
+    try:
+        rows = json.loads(await run_in_threadpool(supabase_request, query))
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Supabase devolvió datos inválidos para la flashcard.",
+        ) from error
+
+    if not isinstance(rows, list) or not rows:
+        raise HTTPException(status_code=404, detail="No se encontró la flashcard.")
+
+    current_level = rows[0].get("nivel_dominio")
+    if not isinstance(current_level, int) or current_level < 0:
+        raise HTTPException(status_code=502, detail="El nivel de dominio de la tarjeta es inválido.")
+
+    if request.rating == 1:
+        new_level = 0
+        days_until_review = 0
+    else:
+        factor = {2: 1.2, 3: 2.5, 4: 4.0}[request.rating]
+        days_until_review = 1 if current_level == 0 else math.ceil(current_level * factor)
+        new_level = days_until_review
+
+    now = datetime.now(timezone.utc)
+    next_review = now + timedelta(days=days_until_review)
+    update_query = urlencode({"id": f"eq.{request.flashcard_id}"})
+    payload = {
+        "nivel_dominio": new_level,
+        "proximo_repaso": next_review.isoformat(),
+    }
+
+    try:
+        updated_rows = json.loads(
+            await run_in_threadpool(
+                supabase_request,
+                update_query,
+                "PATCH",
+                payload,
+            )
+        )
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Supabase devolvió una respuesta inválida al programar el repaso.",
+        ) from error
+
+    if not isinstance(updated_rows, list) or not updated_rows:
+        raise HTTPException(
+            status_code=502,
+            detail="Supabase no confirmó la actualización de la flashcard.",
+        )
+
+    return {
+        "days_until_review": days_until_review,
+        "nivel_dominio": new_level,
+        "proximo_repaso": next_review.isoformat(),
+    }
 
 
 @app.post("/api/translate")

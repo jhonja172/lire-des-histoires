@@ -118,9 +118,12 @@
             <label for="flashcard-answer">¿Qué significa en español?</label>
             <textarea id="flashcard-answer" rows="3" placeholder="Escribe el significado…"></textarea>
             <button id="flashcard-submit-button" class="primary-button" type="submit">Enviar respuesta</button>
-            <button id="next-flashcard-btn" class="primary-button next-flashcard-button" type="button" hidden>
-              Siguiente flashcard
-            </button>
+            <div id="flashcard-rating-buttons" class="flashcard-rating-buttons" aria-label="Califica esta tarjeta" hidden>
+              <button class="rating-button rating-again" type="button" data-rating="1">Otra vez</button>
+              <button class="rating-button rating-hard" type="button" data-rating="2">Difícil</button>
+              <button class="rating-button rating-good" type="button" data-rating="3">Bien</button>
+              <button class="rating-button rating-easy" type="button" data-rating="4">Fácil</button>
+            </div>
             <p id="flashcard-feedback" class="flashcard-feedback" role="status" aria-live="polite"></p>
           </form>
         </article>
