@@ -34,8 +34,9 @@ export function startKaraoke(wordElements) {
 
     let nextActiveWordIndex = -1;
     const currentTime = audioPlayer.currentTime;
+    console.log("Array de tiempos:", window.wordBoundaries);
     for (let index = 0; index < wordBoundaries.length; index += 1) {
-      if (wordBoundaries[index].start <= currentTime) {
+      if (currentTime >= wordBoundaries[index].start) {
         nextActiveWordIndex = index;
       }
     }
