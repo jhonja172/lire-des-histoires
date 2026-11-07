@@ -60,6 +60,7 @@ let stopKaraoke = () => {};
 let translationController = null;
 let wordLookupController = null;
 let currentDictionaryLine = null;
+let currentDictionaryWord = "";
 
 async function readApiError(response) {
   const body = await response.text();
@@ -84,6 +85,19 @@ async function postApi(path, text, signal) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
     signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+  return response.json();
+}
+
+async function postFlashcardApi(word, paragraph) {
+  const response = await fetch(`${API_URL}/api/generate_flashcard`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ word, paragraph }),
   });
 
   if (!response.ok) {
@@ -190,6 +204,7 @@ async function lookupWord(wordElement) {
   }
 
   currentDictionaryLine = wordElement.closest(".reader-line");
+  currentDictionaryWord = word;
   wordLookupController?.abort();
   const controller = new AbortController();
   wordLookupController = controller;
@@ -215,42 +230,37 @@ async function lookupWord(wordElement) {
 }
 
 async function saveDictionaryFlashcard() {
-  if (!currentDictionaryLine) {
-    setStatus("No se encontró la línea de la palabra seleccionada.", true);
+  if (!currentDictionaryLine || !currentDictionaryWord) {
+    setStatus("No se encontró la palabra o su línea de contexto.", true);
     return;
   }
 
-  const french = currentDictionaryLine.dataset.frenchText;
-  const translation = currentDictionaryLine.querySelector(".line-translation");
-  let spanish = translation?.textContent.trim() ?? "";
-  if (!spanish || spanish === "Pulsa «Traducir» para ver la traducción." || spanish === "No se pudo cargar la traducción.") {
-    saveDictionaryFlashcardButton.disabled = true;
-    saveDictionaryFlashcardButton.textContent = "Traduciendo…";
-    try {
-      spanish = await translateText(french);
-      if (translation) {
-        translation.textContent = spanish;
-      }
-    } catch (error) {
-      saveDictionaryFlashcardButton.disabled = false;
-      saveDictionaryFlashcardButton.textContent = "Guardar para estudiar";
-      modalTranslation.textContent = error instanceof Error
-        ? error.message
-        : "No se pudo traducir la frase.";
-      return;
-    }
-  }
-
   saveDictionaryFlashcardButton.disabled = true;
-  saveDictionaryFlashcardButton.textContent = "Guardando…";
+  saveDictionaryFlashcardButton.textContent = "Creando flashcard…";
+  modalTranslation.textContent = "Gemini está preparando una frase corta y su traducción…";
   try {
-    await saveFlashcard(french, spanish);
+    const result = await postFlashcardApi(
+      currentDictionaryWord,
+      currentDictionaryLine.dataset.frenchText,
+    );
+    if (
+      typeof result?.frase_francesa !== "string"
+      || !result.frase_francesa.trim()
+      || typeof result?.traduccion_espanola !== "string"
+      || !result.traduccion_espanola.trim()
+    ) {
+      throw new Error("El servidor devolvió una flashcard inválida.");
+    }
+
+    await saveFlashcard(result.frase_francesa, result.traduccion_espanola);
     closeDictionaryModal();
     setStatus("Frase guardada para estudiar.");
   } catch (error) {
     saveDictionaryFlashcardButton.disabled = false;
     saveDictionaryFlashcardButton.textContent = "Guardar para estudiar";
-    setStatus(error instanceof Error ? error.message : "No se pudo guardar la frase.", true);
+    const message = error instanceof Error ? error.message : "No se pudo guardar la flashcard.";
+    modalTranslation.textContent = message;
+    setStatus(message, true);
   }
 }
 
@@ -463,6 +473,7 @@ function closeDictionaryModal() {
   wordLookupController?.abort();
   dictionaryModal.hidden = true;
   currentDictionaryLine = null;
+  currentDictionaryWord = "";
 }
 
 function setPlayingState(isPlaying) {
