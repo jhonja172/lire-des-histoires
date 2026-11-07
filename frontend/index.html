@@ -81,6 +81,7 @@
             <select id="speed-select">
               <option value="0.5">0.5×</option>
               <option value="0.75">0.75×</option>
+              <option value="0.85">0.85×</option>
               <option value="1" selected>1×</option>
               <option value="1.25">1.25×</option>
               <option value="1.5">1.5×</option>
@@ -110,6 +111,11 @@
             <label for="flashcard-answer">¿Qué significa en español?</label>
             <textarea id="flashcard-answer" rows="3" placeholder="Escribe el significado…"></textarea>
             <button id="flashcard-submit-button" class="primary-button" type="submit">Enviar respuesta</button>
+            <button id="show-answer-btn" class="secondary-button" type="button">Ver respuesta</button>
+            <div id="answer-container" class="answer-container" hidden></div>
+            <button id="next-flashcard-btn" class="primary-button next-flashcard-button" type="button" hidden>
+              Siguiente flashcard
+            </button>
             <p id="flashcard-feedback" class="flashcard-feedback" role="status" aria-live="polite"></p>
           </form>
         </article>

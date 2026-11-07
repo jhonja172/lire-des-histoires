@@ -512,6 +512,36 @@ textarea:focus-visible,
   margin-top: 5px;
 }
 
+.secondary-button {
+  min-height: 44px;
+  justify-self: center;
+  padding: 0 18px;
+  border: 1px solid #dce2eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #2563eb;
+  font-weight: 600;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.secondary-button:hover {
+  border-color: #b7c8f5;
+  background: #f5f8ff;
+}
+
+.answer-container {
+  padding: 14px 16px;
+  border-radius: 11px;
+  background: #f1f8f2;
+  color: #245c32;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.next-flashcard-button {
+  justify-self: center;
+}
+
 .flashcard-feedback {
   min-height: 1.3em;
   margin: 0;

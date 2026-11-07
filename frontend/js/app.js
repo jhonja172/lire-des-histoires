@@ -37,6 +37,9 @@ const flashcardFrench = document.querySelector("#flashcard-french");
 const flashcardAudioButton = document.querySelector("#flashcard-audio-button");
 const flashcardAnswerForm = document.querySelector("#flashcard-answer-form");
 const flashcardAnswer = document.querySelector("#flashcard-answer");
+const showAnswerButton = document.querySelector("#show-answer-btn");
+const answerContainer = document.querySelector("#answer-container");
+const nextFlashcardButton = document.querySelector("#next-flashcard-btn");
 const flashcardFeedback = document.querySelector("#flashcard-feedback");
 const flashcardsEmpty = document.querySelector("#flashcards-empty");
 const audioPlayer = document.getElementById("player");
@@ -411,6 +414,11 @@ function renderCurrentFlashcard() {
   flashcardFrench.textContent = flashcard?.frase_francesa ?? "";
   flashcardAnswer.value = "";
   flashcardFeedback.textContent = "";
+  answerContainer.textContent = flashcard?.traduccion_espanola ?? "";
+  answerContainer.hidden = true;
+  showAnswerButton.hidden = !flashcard;
+  showAnswerButton.disabled = false;
+  nextFlashcardButton.hidden = true;
 }
 
 async function openFlashcards() {
@@ -619,6 +627,25 @@ flashcardAnswerForm.addEventListener("submit", (event) => {
     return;
   }
   flashcardFeedback.textContent = "La validación de respuestas estará disponible próximamente.";
+  nextFlashcardButton.hidden = false;
+});
+showAnswerButton.addEventListener("click", () => {
+  const flashcard = flashcards[currentFlashcardIndex];
+  if (!flashcard) {
+    return;
+  }
+
+  answerContainer.textContent = flashcard.traduccion_espanola;
+  answerContainer.hidden = false;
+  showAnswerButton.hidden = true;
+  nextFlashcardButton.hidden = false;
+});
+nextFlashcardButton.addEventListener("click", () => {
+  if (!flashcards.length) {
+    return;
+  }
+  currentFlashcardIndex = (currentFlashcardIndex + 1) % flashcards.length;
+  renderCurrentFlashcard();
 });
 saveDictionaryFlashcardButton.addEventListener("click", () => {
   void saveDictionaryFlashcard();
