@@ -1,15 +1,17 @@
-export function startKaraoke(wordBoundaries, wordSpans) {
+export function startKaraoke(wordBoundaries, wordElements) {
   const audioPlayer = document.getElementById("player");
   if (!audioPlayer) {
     throw new Error("El reproductor de audio no está disponible.");
   }
 
   let animationFrameId = null;
+  let activeWordIndex = -1;
 
   const clearHighlights = () => {
-    for (const wordSpan of wordSpans) {
-      wordSpan.classList.remove("word-highlight");
+    for (const wordElement of wordElements) {
+      wordElement.classList.remove("word-highlight");
     }
+    activeWordIndex = -1;
   };
 
   const stopSync = () => {
@@ -27,16 +29,22 @@ export function startKaraoke(wordBoundaries, wordSpans) {
       return;
     }
 
-    let activeWordIndex = -1;
+    let nextActiveWordIndex = -1;
     const currentTime = audioPlayer.currentTime;
     for (let index = 0; index < wordBoundaries.length; index += 1) {
-      if (wordBoundaries[index].start < currentTime) {
-        activeWordIndex = index;
+      if (wordBoundaries[index].start <= currentTime) {
+        nextActiveWordIndex = index;
       }
     }
 
-    clearHighlights();
-    wordSpans[activeWordIndex]?.classList.add("word-highlight");
+    if (nextActiveWordIndex !== activeWordIndex) {
+      if (activeWordIndex >= 0) {
+        wordElements[activeWordIndex]?.classList.remove("word-highlight");
+      }
+      wordElements[nextActiveWordIndex]?.classList.add("word-highlight");
+      activeWordIndex = nextActiveWordIndex;
+    }
+
     animationFrameId = requestAnimationFrame(syncKaraoke);
   };
 

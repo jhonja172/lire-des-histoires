@@ -35,7 +35,7 @@ let currentAudioText = null;
 let currentAudioUrl = null;
 let currentAudioBase64 = null;
 let currentWordBoundaries = [];
-let wordSpans = [];
+let wordElements = [];
 let stopKaraoke = () => {};
 let translationController = null;
 let wordLookupController = null;
@@ -205,13 +205,13 @@ function createWordElement(value) {
   return word;
 }
 
-function renderFrenchLine(paragraph, text, wordSpans) {
+function renderFrenchLine(paragraph, text, wordElements) {
   for (const part of text.split(/(\s+)/u)) {
     if (/^\s+$/u.test(part)) {
       paragraph.append(document.createTextNode(part));
     } else {
       const wordSpan = createWordElement(part);
-      wordSpans.push(wordSpan);
+      wordElements.push(wordSpan);
       paragraph.append(wordSpan);
     }
   }
@@ -281,7 +281,7 @@ function openStory(story) {
   currentStoryText = story.content.trim();
   readerTitle.textContent = storyTitle(story.content);
   readerLines.replaceChildren();
-  wordSpans = [];
+  wordElements = [];
 
   const paragraphs = currentStoryText
     .split(/\r?\n/u)
@@ -295,7 +295,7 @@ function openStory(story) {
 
     const french = document.createElement("p");
     french.className = "line-french";
-    renderFrenchLine(french, text, wordSpans);
+    renderFrenchLine(french, text, wordElements);
 
     const translation = document.createElement("p");
     translation.className = "line-translation";
@@ -366,7 +366,7 @@ async function playStory() {
       audioPlayer.src = currentAudioUrl;
       audioPlayer.currentTime = 0;
       audioPlayer.playbackRate = Number(speedSelect.value);
-      stopKaraoke = startKaraoke(currentWordBoundaries, wordSpans);
+      stopKaraoke = startKaraoke(currentWordBoundaries, wordElements);
     }
 
     await audioPlayer.play();
