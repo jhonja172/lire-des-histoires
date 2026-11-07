@@ -49,8 +49,7 @@ export async function saveFlashcard(french, spanish) {
 export async function getFlashcards() {
   const query = new URLSearchParams({
     select: "id,frase_francesa,traduccion_espanola,created_at,nivel_dominio,proximo_repaso",
-    proximo_repaso: `lte.${new Date().toISOString()}`,
-    order: "proximo_repaso.asc",
+    order: "created_at.desc",
   });
   const response = await fetch(`${TABLE_URL}?${query}`, {
     headers: getHeaders(),
