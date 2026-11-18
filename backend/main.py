@@ -2,6 +2,7 @@ import base64
 import json
 import math
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 from urllib.error import HTTPError, URLError
@@ -10,6 +11,7 @@ from urllib.request import Request as URLRequest, urlopen
 
 import edge_tts
 from google import genai
+from google.genai import errors
 from google.genai import types
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -333,14 +335,37 @@ async def generate_quiz(request: QuizRequest):
             http_options=types.HttpOptions(api_version="v1beta"),
         )
         print("Conectando con Gemini (gemini-3.5-flash, API v1beta).")
-        response = await run_in_threadpool(
-            lambda: client.models.generate_content(
-                model="gemini-3.5-flash",
-                contents=prompt,
-                config=types.GenerateContentConfig(response_mime_type="application/json"),
-            )
-        )
+        for attempt in range(3):
+            try:
+                response = await run_in_threadpool(
+                    lambda: client.models.generate_content(
+                        model="gemini-3.5-flash",
+                        contents=prompt,
+                        config=types.GenerateContentConfig(response_mime_type="application/json"),
+                    )
+                )
+                break
+            except errors.ServerError as error:
+                if error.code != 503:
+                    raise
+                if attempt == 2:
+                    raise HTTPException(
+                        status_code=503,
+                        detail=(
+                            "El servicio de IA está temporalmente ocupado. "
+                            "Por favor, intenta de nuevo en unos segundos."
+                        ),
+                    ) from error
+
+                delay = 2**attempt
+                print(
+                    f"Gemini no disponible (503); reintento "
+                    f"{attempt + 2}/3 en {delay} segundo(s)."
+                )
+                await run_in_threadpool(time.sleep, delay)
         print("Gemini generó correctamente las preguntas.")
+    except HTTPException:
+        raise
     except Exception as error:
         print(f"Error generando preguntas con Gemini: {error}")
         raise HTTPException(
