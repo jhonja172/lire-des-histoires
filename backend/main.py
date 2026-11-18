@@ -328,14 +328,19 @@ async def generate_quiz(request: QuizRequest):
 
     print("Ejecutando Gemini para generar preguntas de comprensión.")
     try:
-        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        client = genai.Client(
+            api_key=os.environ["GEMINI_API_KEY"],
+            http_options=types.HttpOptions(api_version="v1beta"),
+        )
+        print("Conectando con Gemini (gemini-3.5-flash, API v1beta).")
         response = await run_in_threadpool(
             lambda: client.models.generate_content(
-                model="gemini-1.5-flash",
+                model="gemini-3.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(response_mime_type="application/json"),
             )
         )
+        print("Gemini generó correctamente las preguntas.")
     except Exception as error:
         print(f"Error generando preguntas con Gemini: {error}")
         raise HTTPException(
