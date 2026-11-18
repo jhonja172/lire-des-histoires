@@ -32,6 +32,10 @@ class TextRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=5000)
 
 
+class QuizRequest(BaseModel):
+    texto: str = Field(..., min_length=1, max_length=5000)
+
+
 class FlashcardRequest(BaseModel):
     word: str = Field(..., min_length=1, max_length=200)
     paragraph: str = Field(..., min_length=1, max_length=5000)
@@ -305,6 +309,97 @@ async def schedule_flashcard(request: FlashcardScheduleRequest):
         "nivel_dominio": new_level,
         "proximo_repaso": next_review.isoformat(),
     }
+
+
+@app.post("/api/generar_preguntas")
+async def generate_quiz(request: QuizRequest):
+    text = request.texto.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="El texto no puede estar vacío.")
+
+    prompt = (
+        f"Eres un profesor de francés. Lee este texto: '{text}'. Genera exactamente "
+        "5 preguntas de comprensión lectora en francés. Para cada pregunta, "
+        "devuelve un JSON estricto con esta estructura: "
+        '[{"pregunta": "...", "opciones": ["A", "B", "C", "D"], '
+        '"respuesta_correcta": "A", "explicacion": "Breve explicación en español '
+        "de por qué es la respuesta correcta basada en el texto\"}]"
+    )
+
+    print("Ejecutando Gemini para generar preguntas de comprensión.")
+    try:
+        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        response = await run_in_threadpool(
+            lambda: client.models.generate_content(
+                model="gemini-1.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+        )
+    except Exception as error:
+        print(f"Error generando preguntas con Gemini: {error}")
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudieron generar las preguntas.",
+        ) from error
+
+    if not response.text:
+        raise HTTPException(status_code=502, detail="Gemini no devolvió preguntas.")
+
+    cleaned_response = response.text.strip()
+    if cleaned_response.startswith("```"):
+        cleaned_response = cleaned_response[3:].lstrip()
+        if cleaned_response[:4].lower() == "json":
+            cleaned_response = cleaned_response[4:].lstrip()
+        if cleaned_response.endswith("```"):
+            cleaned_response = cleaned_response[:-3].rstrip()
+
+    try:
+        result = json.loads(cleaned_response)
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini devolvió preguntas con formato JSON inválido.",
+        ) from error
+
+    if not isinstance(result, list) or len(result) != 5:
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini no devolvió exactamente 5 preguntas.",
+        )
+
+    validated_questions = []
+    for question in result:
+        if not isinstance(question, dict):
+            raise HTTPException(status_code=502, detail="Gemini devolvió una pregunta inválida.")
+
+        statement = question.get("pregunta")
+        options = question.get("opciones")
+        correct_answer = question.get("respuesta_correcta")
+        explanation = question.get("explicacion")
+        if (
+            not isinstance(statement, str)
+            or not statement.strip()
+            or not isinstance(options, list)
+            or len(options) != 4
+            or any(not isinstance(option, str) or not option.strip() for option in options)
+            or not isinstance(correct_answer, str)
+            or correct_answer.strip() not in [option.strip() for option in options]
+            or not isinstance(explanation, str)
+            or not explanation.strip()
+        ):
+            raise HTTPException(status_code=502, detail="Gemini devolvió una pregunta inválida.")
+
+        validated_questions.append(
+            {
+                "pregunta": statement.strip(),
+                "opciones": [option.strip() for option in options],
+                "respuesta_correcta": correct_answer.strip(),
+                "explicacion": explanation.strip(),
+            }
+        )
+
+    return validated_questions
 
 
 @app.post("/api/translate")

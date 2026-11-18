@@ -12,14 +12,26 @@ const libraryScreen = document.querySelector("#library-screen");
 const readerScreen = document.querySelector("#reader-screen");
 const addScreen = document.querySelector("#add-screen");
 const flashcardsScreen = document.querySelector("#flashcards-screen");
+const quizScreen = document.querySelector("#quiz-screen");
 const storyList = document.querySelector("#story-list");
 const emptyLibrary = document.querySelector("#empty-library");
 const statusMessage = document.querySelector("#status-message");
 const openLibraryButton = document.querySelector("#open-library-button");
 const openFlashcardsButton = document.querySelector("#open-flashcards-button");
+const openQuizButton = document.querySelector("#open-quiz-button");
 const addTextButton = document.querySelector("#add-text-button");
 const backHomeFromLibraryButton = document.querySelector("#back-home-from-library");
 const backHomeFromFlashcardsButton = document.querySelector("#back-home-from-flashcards");
+const backHomeFromQuizButton = document.querySelector("#back-home-from-quiz");
+const backHomeFromQuizCompleteButton = document.querySelector("#back-home-from-quiz-complete");
+const quizLoading = document.querySelector("#quiz-loading");
+const quizLoadingMessage = document.querySelector("#quiz-loading-message");
+const quizStoryPicker = document.querySelector("#quiz-story-picker");
+const quizStorySelect = document.querySelector("#quiz-story-select");
+const startQuizButton = document.querySelector("#start-quiz-button");
+const quizQuestions = document.querySelector("#quiz-questions");
+const quizCompletion = document.querySelector("#quiz-completion");
+const quizScore = document.querySelector("#quiz-score");
 const backToLibraryButton = document.querySelector("#back-to-library");
 const cancelAddButton = document.querySelector("#cancel-add-button");
 const storyForm = document.querySelector("#story-form");
@@ -71,6 +83,8 @@ let translationController = null;
 let wordLookupController = null;
 let currentDictionaryLine = null;
 let currentDictionaryWord = "";
+let quizRequestController = null;
+let quizFlowId = 0;
 
 async function readApiError(response) {
   const body = await response.text();
@@ -175,6 +189,7 @@ function showScreen(screenName) {
   readerScreen.hidden = screenName !== "reader";
   addScreen.hidden = screenName !== "add";
   flashcardsScreen.hidden = screenName !== "flashcards";
+  quizScreen.hidden = screenName !== "quiz";
 }
 
 function setStatus(message, isError = false) {
@@ -429,6 +444,215 @@ function openStory(story) {
   setStatus("");
 }
 
+function validateQuizQuestions(result) {
+  const questions = Array.isArray(result) ? result : result?.preguntas;
+  if (!Array.isArray(questions) || questions.length !== 5) {
+    throw new Error("El servidor no devolvió exactamente 5 preguntas.");
+  }
+
+  return questions.map((question) => {
+    if (
+      typeof question?.pregunta !== "string"
+      || !question.pregunta.trim()
+      || !Array.isArray(question.opciones)
+      || question.opciones.length !== 4
+      || question.opciones.some((option) => typeof option !== "string" || !option.trim())
+      || typeof question.respuesta_correcta !== "string"
+      || !question.opciones.some((option) => option.trim() === question.respuesta_correcta.trim())
+      || typeof question.explicacion !== "string"
+      || !question.explicacion.trim()
+    ) {
+      throw new Error("El servidor devolvió una pregunta con formato inválido.");
+    }
+
+    return {
+      pregunta: question.pregunta.trim(),
+      opciones: question.opciones.map((option) => option.trim()),
+      respuesta_correcta: question.respuesta_correcta.trim(),
+      explicacion: question.explicacion.trim(),
+    };
+  });
+}
+
+function renderQuizQuestions(questions) {
+  let answeredCount = 0;
+  let correctCount = 0;
+  quizQuestions.replaceChildren();
+
+  questions.forEach((question, questionIndex) => {
+    const card = document.createElement("article");
+    card.className = "quiz-question-card";
+
+    const heading = document.createElement("h2");
+    heading.textContent = `Pregunta ${questionIndex + 1}`;
+    const statement = document.createElement("p");
+    statement.className = "quiz-question-text";
+    statement.textContent = question.pregunta;
+    const options = document.createElement("div");
+    options.className = "quiz-options";
+    const feedback = document.createElement("p");
+    feedback.className = "quiz-answer-feedback";
+    feedback.setAttribute("role", "status");
+    feedback.setAttribute("aria-live", "polite");
+    const explanation = document.createElement("p");
+    explanation.className = "quiz-explanation";
+    explanation.setAttribute("role", "note");
+    explanation.hidden = true;
+
+    for (const option of question.opciones) {
+      const optionButton = document.createElement("button");
+      optionButton.type = "button";
+      optionButton.className = "quiz-option";
+      optionButton.textContent = option;
+      optionButton.addEventListener("click", () => {
+        if (optionButton.disabled) {
+          return;
+        }
+
+        const isCorrect = option === question.respuesta_correcta;
+        for (const button of options.querySelectorAll(".quiz-option")) {
+          button.disabled = true;
+          if (button.textContent === question.respuesta_correcta) {
+            button.classList.add("quiz-option-correct");
+          }
+        }
+        if (!isCorrect) {
+          optionButton.classList.add("quiz-option-incorrect");
+        } else {
+          correctCount += 1;
+        }
+
+        answeredCount += 1;
+        feedback.textContent = isCorrect
+          ? "¡Correcto!"
+          : `Incorrecto. Respuesta correcta: ${question.respuesta_correcta}`;
+        if (!isCorrect) {
+          explanation.textContent = question.explicacion;
+          explanation.hidden = false;
+        }
+
+        if (answeredCount === questions.length) {
+          quizScore.textContent = `Has acertado ${correctCount} de ${questions.length} preguntas.`;
+          quizCompletion.hidden = false;
+        }
+      });
+      options.append(optionButton);
+    }
+
+    card.append(heading, statement, options, feedback, explanation);
+    quizQuestions.append(card);
+  });
+
+  quizQuestions.hidden = false;
+}
+
+async function startQuiz(text) {
+  quizRequestController?.abort();
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 120000);
+  quizRequestController = controller;
+  quizStoryPicker.hidden = true;
+  quizQuestions.hidden = true;
+  quizCompletion.hidden = true;
+  quizQuestions.replaceChildren();
+  quizLoadingMessage.textContent = "Generando preguntas...";
+  quizLoading.hidden = false;
+  setStatus("");
+
+  try {
+    const response = await fetch(`${API_URL}/api/generar_preguntas`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texto: text }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(await readApiError(response));
+    }
+
+    const questions = validateQuizQuestions(await response.json());
+    if (controller.signal.aborted) {
+      return;
+    }
+    renderQuizQuestions(questions);
+  } catch (error) {
+    if (controller.signal.aborted && !timedOut) {
+      return;
+    }
+    const message = timedOut
+      ? "La generación tardó más de 2 minutos y se canceló."
+      : error instanceof Error
+        ? error.message
+        : "No se pudieron cargar las preguntas.";
+    setStatus(message, true);
+  } finally {
+    clearTimeout(timeoutId);
+    if (quizRequestController === controller) {
+      quizRequestController = null;
+      quizLoading.hidden = true;
+    }
+  }
+}
+
+async function openQuiz() {
+  const flowId = ++quizFlowId;
+  stopFlashcardAudio();
+  quizRequestController?.abort();
+  showScreen("quiz");
+  quizLoading.hidden = true;
+  quizStoryPicker.hidden = true;
+  quizQuestions.hidden = true;
+  quizCompletion.hidden = true;
+  quizQuestions.replaceChildren();
+  setStatus("");
+
+  if (currentStoryText) {
+    await startQuiz(currentStoryText);
+    return;
+  }
+
+  quizLoadingMessage.textContent = "Cargando historias…";
+  quizLoading.hidden = false;
+  try {
+    stories = await getStories();
+    if (flowId !== quizFlowId) {
+      return;
+    }
+
+    if (!stories.length) {
+      setStatus("Agrega una historia en la biblioteca antes de empezar un quiz.", true);
+      return;
+    }
+
+    if (stories.length === 1) {
+      currentStoryText = stories[0].content.trim();
+      await startQuiz(currentStoryText);
+      return;
+    }
+
+    quizStorySelect.replaceChildren();
+    for (const story of stories) {
+      const option = document.createElement("option");
+      option.value = String(story.id);
+      option.textContent = storyTitle(story.content);
+      quizStorySelect.append(option);
+    }
+    quizStoryPicker.hidden = false;
+  } catch (error) {
+    if (flowId === quizFlowId) {
+      setStatus(error instanceof Error ? error.message : "No se pudieron cargar tus historias.", true);
+    }
+  } finally {
+    if (flowId === quizFlowId) {
+      quizLoading.hidden = true;
+    }
+  }
+}
+
 function stopFlashcardAudio() {
   if (!flashcardAudioUrl) {
     return;
@@ -631,6 +855,9 @@ openLibraryButton.addEventListener("click", () => {
 openFlashcardsButton.addEventListener("click", () => {
   void openFlashcards();
 });
+openQuizButton.addEventListener("click", () => {
+  void openQuiz();
+});
 backHomeFromLibraryButton.addEventListener("click", () => {
   stopFlashcardAudio();
   showScreen("home");
@@ -640,6 +867,25 @@ backHomeFromFlashcardsButton.addEventListener("click", () => {
   stopFlashcardAudio();
   showScreen("home");
   setStatus("");
+});
+function returnHomeFromQuiz() {
+  quizFlowId += 1;
+  quizRequestController?.abort();
+  quizRequestController = null;
+  showScreen("home");
+  setStatus("");
+}
+backHomeFromQuizButton.addEventListener("click", returnHomeFromQuiz);
+backHomeFromQuizCompleteButton.addEventListener("click", returnHomeFromQuiz);
+startQuizButton.addEventListener("click", () => {
+  const story = stories.find((item) => String(item.id) === quizStorySelect.value);
+  if (!story) {
+    setStatus("Selecciona una historia válida.", true);
+    return;
+  }
+
+  currentStoryText = story.content.trim();
+  void startQuiz(currentStoryText);
 });
 addTextButton.addEventListener("click", () => {
   showScreen("add");

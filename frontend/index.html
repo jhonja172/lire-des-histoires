@@ -48,6 +48,14 @@
             </span>
             <span class="practice-arrow" aria-hidden="true">→</span>
           </button>
+          <button id="open-quiz-button" class="practice-card quiz-card" type="button">
+            <span class="practice-icon" aria-hidden="true">❓</span>
+            <span class="practice-card-copy">
+              <strong>Quiz de Comprensión</strong>
+              <span>Responde preguntas sobre la historia que leíste</span>
+            </span>
+            <span class="practice-arrow" aria-hidden="true">→</span>
+          </button>
         </nav>
       </section>
 
@@ -128,6 +136,31 @@
           </form>
         </article>
         <p id="flashcards-empty" class="empty-state" hidden>Aún no hay frases guardadas. Guarda una traducción desde la biblioteca para empezar.</p>
+      </section>
+
+      <section id="quiz-screen" class="screen quiz-screen" aria-labelledby="quiz-title" hidden>
+        <button id="back-home-from-quiz" class="text-button back-button" type="button">
+          <span aria-hidden="true">←</span> Inicio
+        </button>
+        <div class="quiz-heading">
+          <p class="eyebrow">Comprueba lo que entendiste</p>
+          <h1 id="quiz-title">Quiz de Comprensión</h1>
+          <p>Responde las preguntas sobre tu historia.</p>
+        </div>
+        <div id="quiz-loading" class="quiz-loading" role="status" aria-live="polite" hidden>
+          <span class="quiz-spinner" aria-hidden="true"></span>
+          <span id="quiz-loading-message">Generando preguntas...</span>
+        </div>
+        <div id="quiz-story-picker" class="quiz-story-picker" hidden>
+          <label for="quiz-story-select">Elige una historia para crear tus preguntas</label>
+          <select id="quiz-story-select"></select>
+          <button id="start-quiz-button" class="primary-button" type="button">Empezar quiz</button>
+        </div>
+        <div id="quiz-questions" class="quiz-questions" hidden></div>
+        <div id="quiz-completion" class="quiz-completion" hidden>
+          <p id="quiz-score" role="status" aria-live="polite"></p>
+          <button id="back-home-from-quiz-complete" class="primary-button" type="button">Volver al inicio</button>
+        </div>
       </section>
 
       <section id="add-screen" class="screen" aria-labelledby="add-title" hidden>
