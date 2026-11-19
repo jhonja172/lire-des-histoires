@@ -106,6 +106,11 @@ class FlashcardRequest(BaseModel):
     paragraph: str = Field(..., min_length=1, max_length=5000)
 
 
+class FlashcardSaveRequest(BaseModel):
+    frase_francesa: str = Field(..., min_length=1, max_length=2000)
+    traduccion_espanola: str = Field(..., min_length=1, max_length=2000)
+
+
 class FlashcardValidationRequest(BaseModel):
     user_answer: str = Field(..., min_length=1, max_length=2000)
     correct_answer: str = Field(..., min_length=1, max_length=2000)
@@ -127,8 +132,9 @@ def supabase_request(path: str, method: str = "GET", payload: dict | None = None
         )
 
     body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    query = f"?{path}" if path else ""
     request = URLRequest(
-        f"{supabase_url.rstrip('/')}/rest/v1/flashcards?{path}",
+        f"{supabase_url.rstrip('/')}/rest/v1/flashcards{query}",
         data=body,
         method=method,
         headers={
@@ -374,6 +380,46 @@ async def schedule_flashcard(request: FlashcardScheduleRequest):
     }
 
 
+@app.post("/api/save_flashcard")
+async def save_flashcard(request: FlashcardSaveRequest):
+    french = request.frase_francesa.strip()
+    spanish = request.traduccion_espanola.strip()
+    if not french or not spanish:
+        raise HTTPException(
+            status_code=400,
+            detail="La frase en francés y su traducción son requeridas.",
+        )
+
+    try:
+        response_body = await run_in_threadpool(
+            supabase_request,
+            "",
+            "POST",
+            {
+                "frase_francesa": french,
+                "traduccion_espanola": spanish,
+            },
+        )
+    except HTTPException:
+        raise
+
+    try:
+        saved_rows = json.loads(response_body)
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Supabase devolvió una respuesta inválida al guardar la flashcard.",
+        ) from error
+
+    if not isinstance(saved_rows, list) or not saved_rows:
+        raise HTTPException(
+            status_code=502,
+            detail="Supabase no confirmó el guardado de la flashcard.",
+        )
+
+    return {"flashcard": saved_rows[0]}
+
+
 @app.post("/api/generar_preguntas")
 async def generate_quiz(request: QuizRequest):
     text = request.texto.strip()
@@ -386,7 +432,10 @@ async def generate_quiz(request: QuizRequest):
         "devuelve un JSON estricto con esta estructura: "
         '[{"pregunta": "...", "opciones": ["A", "B", "C", "D"], '
         '"respuesta_correcta": "A", "explicacion": "Breve explicación en español '
-        "de por qué es la respuesta correcta basada en el texto\"}]"
+        'de por qué es la respuesta correcta basada en el texto", '
+        '"oracion_contexto": "Oración completa y nueva en francés que use la misma '
+        'palabra clave o estructura gramatical", '
+        '"traduccion_contexto": "Traducción al español de la oración de contexto"}]'
     )
 
     print("Ejecutando Gemini para generar preguntas de comprensión.")
@@ -442,6 +491,8 @@ async def generate_quiz(request: QuizRequest):
         options = question.get("opciones")
         correct_answer = question.get("respuesta_correcta")
         explanation = question.get("explicacion")
+        context_sentence = question.get("oracion_contexto")
+        context_translation = question.get("traduccion_contexto")
         if (
             not isinstance(statement, str)
             or not statement.strip()
@@ -452,6 +503,10 @@ async def generate_quiz(request: QuizRequest):
             or correct_answer.strip() not in [option.strip() for option in options]
             or not isinstance(explanation, str)
             or not explanation.strip()
+            or not isinstance(context_sentence, str)
+            or not context_sentence.strip()
+            or not isinstance(context_translation, str)
+            or not context_translation.strip()
         ):
             raise HTTPException(status_code=502, detail="Gemini devolvió una pregunta inválida.")
 
@@ -461,6 +516,8 @@ async def generate_quiz(request: QuizRequest):
                 "opciones": [option.strip() for option in options],
                 "respuesta_correcta": correct_answer.strip(),
                 "explicacion": explanation.strip(),
+                "oracion_contexto": context_sentence.strip(),
+                "traduccion_contexto": context_translation.strip(),
             }
         )
 

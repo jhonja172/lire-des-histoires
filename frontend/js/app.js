@@ -97,6 +97,7 @@ let quizQuestions = [];
 let currentQuestionIndex = 0;
 let selectedAnswer = null;
 let quizCorrectCount = 0;
+let quizContextSaved = false;
 
 async function readApiError(response) {
   const body = await response.text();
@@ -473,6 +474,10 @@ function validateQuizQuestions(result) {
       || !question.opciones.some((option) => option.trim() === question.respuesta_correcta.trim())
       || typeof question.explicacion !== "string"
       || !question.explicacion.trim()
+      || typeof question.oracion_contexto !== "string"
+      || !question.oracion_contexto.trim()
+      || typeof question.traduccion_contexto !== "string"
+      || !question.traduccion_contexto.trim()
     ) {
       throw new Error("El servidor devolvió una pregunta con formato inválido.");
     }
@@ -482,8 +487,33 @@ function validateQuizQuestions(result) {
       opciones: question.opciones.map((option) => option.trim()),
       respuesta_correcta: question.respuesta_correcta.trim(),
       explicacion: question.explicacion.trim(),
+      oracion_contexto: question.oracion_contexto.trim(),
+      traduccion_contexto: question.traduccion_contexto.trim(),
     };
   });
+}
+
+async function saveQuizContextFlashcard(question) {
+  const response = await fetch(`${API_URL}/api/save_flashcard`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      frase_francesa: question.oracion_contexto,
+      traduccion_espanola: question.traduccion_contexto,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+
+  const result = await response.json();
+  if (
+    typeof result?.flashcard?.frase_francesa !== "string"
+    || typeof result.flashcard.traduccion_espanola !== "string"
+  ) {
+    throw new Error("El servidor no confirmó el guardado de la flashcard.");
+  }
 }
 
 function renderQuizQuestions(questions) {
@@ -491,6 +521,7 @@ function renderQuizQuestions(questions) {
   currentQuestionIndex = 0;
   selectedAnswer = null;
   quizCorrectCount = 0;
+  quizContextSaved = false;
   renderCurrentQuizQuestion();
 }
 
@@ -514,6 +545,7 @@ function renderCurrentQuizQuestion() {
   quizExplanation.textContent = "";
   quizExplanation.hidden = true;
   quizNextButton.disabled = true;
+  quizContextSaved = false;
   quizNextButton.textContent = currentQuestionIndex === quizQuestions.length - 1
     ? "Ver resultados"
     : "Siguiente";
@@ -556,9 +588,28 @@ function renderCurrentQuizQuestion() {
   }
 }
 
-function showNextQuizQuestion() {
-  if (selectedAnswer === null) {
+async function showNextQuizQuestion() {
+  if (selectedAnswer === null || quizNextButton.disabled) {
     return;
+  }
+
+  const question = quizQuestions[currentQuestionIndex];
+  if (selectedAnswer !== question.respuesta_correcta && !quizContextSaved) {
+    quizNextButton.disabled = true;
+    quizNextButton.textContent = "Guardando...";
+    try {
+      await saveQuizContextFlashcard(question);
+      quizContextSaved = true;
+      setStatus("Flashcard de contexto guardada.");
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : "No se pudo guardar la flashcard de contexto.",
+        true,
+      );
+      quizNextButton.disabled = false;
+      quizNextButton.textContent = "Reintentar guardado";
+      return;
+    }
   }
 
   currentQuestionIndex += 1;
