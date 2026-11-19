@@ -508,9 +508,12 @@ textarea:focus-visible,
   justify-self: start;
 }
 
-.quiz-questions {
-  display: grid;
-  gap: 16px;
+.quiz-question-progress {
+  margin-bottom: 12px;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
 }
 
 .quiz-question-card h2 {
@@ -578,6 +581,17 @@ textarea:focus-visible,
   color: #70520a;
   font-size: 0.92rem;
   line-height: 1.55;
+}
+
+.quiz-navigation {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.quiz-navigation .primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .quiz-completion {

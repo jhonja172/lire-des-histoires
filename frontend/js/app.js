@@ -29,7 +29,14 @@ const quizLoadingMessage = document.querySelector("#quiz-loading-message");
 const quizStoryPicker = document.querySelector("#quiz-story-picker");
 const quizStorySelect = document.querySelector("#quiz-story-select");
 const startQuizButton = document.querySelector("#start-quiz-button");
-const quizQuestions = document.querySelector("#quiz-questions");
+const quizQuestionProgress = document.querySelector("#quiz-question-progress");
+const quizQuestionCard = document.querySelector("#quiz-question-card");
+const quizQuestionNumber = document.querySelector("#quiz-question-number");
+const quizQuestionText = document.querySelector("#quiz-question-text");
+const quizOptions = document.querySelector("#quiz-options");
+const quizAnswerFeedback = document.querySelector("#quiz-answer-feedback");
+const quizExplanation = document.querySelector("#quiz-explanation");
+const quizNextButton = document.querySelector("#quiz-next-button");
 const quizCompletion = document.querySelector("#quiz-completion");
 const quizScore = document.querySelector("#quiz-score");
 const backToLibraryButton = document.querySelector("#back-to-library");
@@ -85,6 +92,10 @@ let currentDictionaryLine = null;
 let currentDictionaryWord = "";
 let quizRequestController = null;
 let quizFlowId = 0;
+let quizQuestions = [];
+let currentQuestionIndex = 0;
+let selectedAnswer = null;
+let quizCorrectCount = 0;
 
 async function readApiError(response) {
   const body = await response.text();
@@ -475,75 +486,83 @@ function validateQuizQuestions(result) {
 }
 
 function renderQuizQuestions(questions) {
-  let answeredCount = 0;
-  let correctCount = 0;
-  quizQuestions.replaceChildren();
+  quizQuestions = questions;
+  currentQuestionIndex = 0;
+  selectedAnswer = null;
+  quizCorrectCount = 0;
+  renderCurrentQuizQuestion();
+}
 
-  questions.forEach((question, questionIndex) => {
-    const card = document.createElement("article");
-    card.className = "quiz-question-card";
+function renderCurrentQuizQuestion() {
+  const question = quizQuestions[currentQuestionIndex];
+  if (!question) {
+    quizQuestionCard.hidden = true;
+    quizQuestionProgress.hidden = true;
+    quizScore.textContent = `Has acertado ${quizCorrectCount} de ${quizQuestions.length} preguntas.`;
+    quizCompletion.hidden = false;
+    return;
+  }
 
-    const heading = document.createElement("h2");
-    heading.textContent = `Pregunta ${questionIndex + 1}`;
-    const statement = document.createElement("p");
-    statement.className = "quiz-question-text";
-    statement.textContent = question.pregunta;
-    const options = document.createElement("div");
-    options.className = "quiz-options";
-    const feedback = document.createElement("p");
-    feedback.className = "quiz-answer-feedback";
-    feedback.setAttribute("role", "status");
-    feedback.setAttribute("aria-live", "polite");
-    const explanation = document.createElement("p");
-    explanation.className = "quiz-explanation";
-    explanation.setAttribute("role", "note");
-    explanation.hidden = true;
+  quizCompletion.hidden = true;
+  quizQuestionCard.hidden = false;
+  quizQuestionProgress.hidden = false;
+  quizQuestionProgress.textContent = `Pregunta ${currentQuestionIndex + 1} de ${quizQuestions.length}`;
+  quizQuestionNumber.textContent = `Pregunta ${currentQuestionIndex + 1}`;
+  quizQuestionText.textContent = question.pregunta;
+  quizAnswerFeedback.textContent = "";
+  quizExplanation.textContent = "";
+  quizExplanation.hidden = true;
+  quizNextButton.disabled = true;
+  quizNextButton.textContent = currentQuestionIndex === quizQuestions.length - 1
+    ? "Ver resultados"
+    : "Siguiente";
+  quizOptions.replaceChildren();
 
-    for (const option of question.opciones) {
-      const optionButton = document.createElement("button");
-      optionButton.type = "button";
-      optionButton.className = "quiz-option";
-      optionButton.textContent = option;
-      optionButton.addEventListener("click", () => {
-        if (optionButton.disabled) {
-          return;
+  for (const option of question.opciones) {
+    const optionButton = document.createElement("button");
+    optionButton.type = "button";
+    optionButton.className = "quiz-option";
+    optionButton.textContent = option;
+    optionButton.addEventListener("click", () => {
+      if (selectedAnswer !== null) {
+        return;
+      }
+
+      selectedAnswer = option;
+      const isCorrect = option === question.respuesta_correcta;
+      if (isCorrect) {
+        quizCorrectCount += 1;
+      }
+
+      for (const button of quizOptions.querySelectorAll(".quiz-option")) {
+        button.disabled = true;
+        if (button.textContent === question.respuesta_correcta) {
+          button.classList.add("quiz-option-correct");
         }
+      }
+      if (!isCorrect) {
+        optionButton.classList.add("quiz-option-incorrect");
+        quizAnswerFeedback.textContent = `Incorrecto. Respuesta correcta: ${question.respuesta_correcta}`;
+        quizExplanation.textContent = question.explicacion;
+        quizExplanation.hidden = false;
+      } else {
+        quizAnswerFeedback.textContent = "¡Bien joué ! ¡Bien hecho!";
+      }
 
-        const isCorrect = option === question.respuesta_correcta;
-        for (const button of options.querySelectorAll(".quiz-option")) {
-          button.disabled = true;
-          if (button.textContent === question.respuesta_correcta) {
-            button.classList.add("quiz-option-correct");
-          }
-        }
-        if (!isCorrect) {
-          optionButton.classList.add("quiz-option-incorrect");
-        } else {
-          correctCount += 1;
-        }
+      quizNextButton.disabled = false;
+    });
+    quizOptions.append(optionButton);
+  }
+}
 
-        answeredCount += 1;
-        feedback.textContent = isCorrect
-          ? "¡Correcto!"
-          : `Incorrecto. Respuesta correcta: ${question.respuesta_correcta}`;
-        if (!isCorrect) {
-          explanation.textContent = question.explicacion;
-          explanation.hidden = false;
-        }
+function showNextQuizQuestion() {
+  if (selectedAnswer === null) {
+    return;
+  }
 
-        if (answeredCount === questions.length) {
-          quizScore.textContent = `Has acertado ${correctCount} de ${questions.length} preguntas.`;
-          quizCompletion.hidden = false;
-        }
-      });
-      options.append(optionButton);
-    }
-
-    card.append(heading, statement, options, feedback, explanation);
-    quizQuestions.append(card);
-  });
-
-  quizQuestions.hidden = false;
+  currentQuestionIndex += 1;
+  selectedAnswer = null;
+  renderCurrentQuizQuestion();
 }
 
 async function startQuiz(text) {
@@ -556,9 +575,10 @@ async function startQuiz(text) {
   }, 120000);
   quizRequestController = controller;
   quizStoryPicker.hidden = true;
-  quizQuestions.hidden = true;
+  quizQuestionCard.hidden = true;
+  quizQuestionProgress.hidden = true;
   quizCompletion.hidden = true;
-  quizQuestions.replaceChildren();
+  quizOptions.replaceChildren();
   quizLoadingMessage.textContent = "Generando preguntas...";
   quizLoading.hidden = false;
   setStatus("");
@@ -605,9 +625,10 @@ async function openQuiz() {
   showScreen("quiz");
   quizLoading.hidden = true;
   quizStoryPicker.hidden = true;
-  quizQuestions.hidden = true;
+  quizQuestionCard.hidden = true;
+  quizQuestionProgress.hidden = true;
   quizCompletion.hidden = true;
-  quizQuestions.replaceChildren();
+  quizOptions.replaceChildren();
   setStatus("");
 
   if (currentStoryText) {
@@ -877,6 +898,7 @@ function returnHomeFromQuiz() {
 }
 backHomeFromQuizButton.addEventListener("click", returnHomeFromQuiz);
 backHomeFromQuizCompleteButton.addEventListener("click", returnHomeFromQuiz);
+quizNextButton.addEventListener("click", showNextQuizQuestion);
 startQuizButton.addEventListener("click", () => {
   const story = stories.find((item) => String(item.id) === quizStorySelect.value);
   if (!story) {

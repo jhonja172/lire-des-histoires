@@ -156,7 +156,17 @@
           <select id="quiz-story-select"></select>
           <button id="start-quiz-button" class="primary-button" type="button">Empezar quiz</button>
         </div>
-        <div id="quiz-questions" class="quiz-questions" hidden></div>
+        <div id="quiz-question-progress" class="quiz-question-progress" aria-live="polite" hidden></div>
+        <article id="quiz-question-card" class="quiz-question-card" hidden>
+          <h2 id="quiz-question-number"></h2>
+          <p id="quiz-question-text" class="quiz-question-text"></p>
+          <div id="quiz-options" class="quiz-options"></div>
+          <p id="quiz-answer-feedback" class="quiz-answer-feedback" role="status" aria-live="polite"></p>
+          <p id="quiz-explanation" class="quiz-explanation" role="note" hidden></p>
+          <div class="quiz-navigation">
+            <button id="quiz-next-button" class="primary-button" type="button" disabled>Siguiente</button>
+          </div>
+        </article>
         <div id="quiz-completion" class="quiz-completion" hidden>
           <p id="quiz-score" role="status" aria-live="polite"></p>
           <button id="back-home-from-quiz-complete" class="primary-button" type="button">Volver al inicio</button>
