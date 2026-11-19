@@ -40,6 +40,7 @@ const quizNextButton = document.querySelector("#quiz-next-button");
 const quizCompletion = document.querySelector("#quiz-completion");
 const quizScore = document.querySelector("#quiz-score");
 const backToLibraryButton = document.querySelector("#back-to-library");
+const quizFromReaderButton = document.querySelector("#quiz-from-reader-button");
 const cancelAddButton = document.querySelector("#cancel-add-button");
 const storyForm = document.querySelector("#story-form");
 const storyText = document.querySelector("#story-text");
@@ -877,6 +878,11 @@ openFlashcardsButton.addEventListener("click", () => {
   void openFlashcards();
 });
 openQuizButton.addEventListener("click", () => {
+  void openQuiz();
+});
+quizFromReaderButton.addEventListener("click", () => {
+  translationController?.abort();
+  stopCurrentAudio();
   void openQuiz();
 });
 backHomeFromLibraryButton.addEventListener("click", () => {
