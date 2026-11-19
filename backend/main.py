@@ -428,8 +428,11 @@ async def generate_quiz(request: QuizRequest):
 
     prompt = (
         f"Eres un profesor de francés. Lee este texto: '{text}'. Genera exactamente "
-        "5 preguntas de comprensión lectora en francés. Para cada pregunta, "
-        "devuelve un JSON estricto con esta estructura: "
+        "5 preguntas de comprensión lectora en francés. "
+        "Es OBLIGATORIO que generes preguntas completamente diferentes cada vez. "
+        "Varía los enfoques, los personajes y las estructuras gramaticales. "
+        "No repitas preguntas anteriores. Para cada pregunta, devuelve un JSON "
+        "estricto con esta estructura: "
         '[{"pregunta": "...", "opciones": ["A", "B", "C", "D"], '
         '"respuesta_correcta": "A", "explicacion": "Breve explicación en español '
         'de por qué es la respuesta correcta basada en el texto", '
@@ -444,7 +447,10 @@ async def generate_quiz(request: QuizRequest):
         response = await generate_content_with_key_rotation(
             prompt,
             "gemini-3.5-flash-lite",
-            types.GenerateContentConfig(response_mime_type="application/json"),
+            types.GenerateContentConfig(
+                temperature=0.9,
+                response_mime_type="application/json",
+            ),
             api_version="v1beta",
         )
         print("Gemini generó correctamente las preguntas.")
