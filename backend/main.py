@@ -2,6 +2,7 @@ import json
 import math
 import os
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Literal
@@ -54,14 +55,34 @@ def get_next_gemini_api_key():
     return api_key
 
 
-async def generate_content_with_key_rotation(prompt, model, config=None, api_version=None):
+async def generate_content_with_key_rotation(
+    prompt,
+    model,
+    config=None,
+    api_version=None,
+    timeout_seconds=None,
+):
     if not GEMINI_API_KEYS:
         get_next_gemini_api_key()
 
+    deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
     for attempt in range(len(GEMINI_API_KEYS)):
-        client_options = {"api_key": get_next_gemini_api_key()}
+        http_options = {}
         if api_version:
-            client_options["http_options"] = types.HttpOptions(api_version=api_version)
+            http_options["api_version"] = api_version
+        if deadline is not None:
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                raise HTTPException(
+                    status_code=504,
+                    detail="La generación de preguntas tardó demasiado. Inténtalo de nuevo.",
+                )
+            http_options["timeout"] = max(1, int(remaining_seconds * 1000))
+            http_options["retry_options"] = types.HttpRetryOptions(attempts=1)
+
+        client_options = {"api_key": get_next_gemini_api_key()}
+        if http_options:
+            client_options["http_options"] = types.HttpOptions(**http_options)
 
         client = genai.Client(**client_options)
         try:
@@ -82,10 +103,23 @@ async def generate_content_with_key_rotation(prompt, model, config=None, api_ver
             if error.code not in {429, 503}:
                 raise
 
+            if deadline is not None and time.monotonic() >= deadline:
+                raise HTTPException(
+                    status_code=504,
+                    detail="La generación de preguntas tardó demasiado. Inténtalo de nuevo.",
+                ) from error
+
             print(
                 f"Gemini respondió {error.code}; probando la siguiente clave "
                 f"({attempt + 1}/{len(GEMINI_API_KEYS)})."
             )
+        except Exception as error:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise HTTPException(
+                    status_code=504,
+                    detail="La generación de preguntas tardó demasiado. Inténtalo de nuevo.",
+                ) from error
+            raise
 
     raise HTTPException(
         status_code=503,
@@ -460,6 +494,7 @@ async def generate_quiz(request: QuizRequest):
         '"traduccion_contexto": "Traducción al español de la oración de contexto"}]'
     )
 
+    quiz_started_at = time.monotonic()
     print("Ejecutando Gemini para generar preguntas de comprensión.")
     try:
         print("Usando modelo Gemini: gemini-3.5-flash-lite (API v1beta).")
@@ -472,8 +507,12 @@ async def generate_quiz(request: QuizRequest):
                 thinking_config=types.ThinkingConfig(thinking_level="LOW"),
             ),
             api_version="v1beta",
+            timeout_seconds=22,
         )
-        print("Gemini generó correctamente las preguntas.")
+        print(
+            "Gemini generó correctamente las preguntas en "
+            f"{time.monotonic() - quiz_started_at:.2f}s."
+        )
     except HTTPException:
         raise
     except Exception as error:
@@ -547,6 +586,10 @@ async def generate_quiz(request: QuizRequest):
             }
         )
 
+    print(
+        "Respuesta del Quiz lista para enviar en "
+        f"{time.monotonic() - quiz_started_at:.2f}s."
+    )
     return validated_questions
 
 
