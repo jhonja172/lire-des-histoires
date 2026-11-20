@@ -79,7 +79,6 @@ let stories = [];
 let currentStoryText = "";
 let currentAudioText = null;
 let currentAudioUrl = null;
-let currentAudioBase64 = null;
 let currentWordBoundaries = [];
 window.wordBoundaries = currentWordBoundaries;
 let wordElements = [];
@@ -128,6 +127,62 @@ async function postApi(path, text, signal) {
     throw new Error(await readApiError(response));
   }
   return response.json();
+}
+
+async function postAudio(text) {
+  const response = await fetch(`${API_URL}/api/audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+
+  const audioBlob = await response.blob();
+  if (!audioBlob.size || !audioBlob.type.startsWith("audio/")) {
+    throw new Error("El servidor no devolvió un archivo de audio válido.");
+  }
+  return audioBlob;
+}
+
+function loadAudioMetadata(audio, source) {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      audio.removeEventListener("loadedmetadata", onLoaded);
+      audio.removeEventListener("error", onError);
+    };
+    const onLoaded = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error("No se pudieron leer los datos del archivo de audio."));
+    };
+
+    audio.addEventListener("loadedmetadata", onLoaded, { once: true });
+    audio.addEventListener("error", onError, { once: true });
+    audio.src = source;
+    audio.load();
+  });
+}
+
+function estimateWordBoundaries(text, duration) {
+  const words = text.match(/\S+/gu) ?? [];
+  const totalCharacters = words.reduce((total, word) => total + word.length, 0);
+  if (!words.length || !totalCharacters || !Number.isFinite(duration) || duration <= 0) {
+    throw new Error("No se pudo calcular la sincronización de las palabras.");
+  }
+
+  let elapsed = 0;
+  return words.map((word) => {
+    const start = elapsed;
+    const wordDuration = duration * (word.length / totalCharacters);
+    elapsed += wordDuration;
+    return { text: word, start, duration: wordDuration };
+  });
 }
 
 async function postFlashcardApi(word, paragraph) {
@@ -409,7 +464,6 @@ function stopCurrentAudio() {
   stopKaraoke();
   stopKaraoke = () => {};
   currentAudioText = null;
-  currentAudioBase64 = null;
   currentWordBoundaries = [];
   window.wordBoundaries = currentWordBoundaries;
   wordElements = [];
@@ -824,16 +878,10 @@ async function playFlashcardAudio() {
   flashcardAudioButton.disabled = true;
   setStatus("Preparando audio…");
   try {
-    const result = await postApi("/api/audio", flashcard.frase_francesa);
-    if (typeof result?.audio_base64 !== "string") {
-      throw new Error("El servidor no devolvió audio válido.");
-    }
-
+    const audioBlob = await postAudio(flashcard.frase_francesa);
     stopFlashcardAudio();
-    const binary = atob(result.audio_base64);
-    const audioBytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
     flashcardAudioUrl = URL.createObjectURL(
-      new Blob([audioBytes], { type: "audio/mpeg" }),
+      audioBlob,
     );
     audioPlayer.src = flashcardAudioUrl;
     await audioPlayer.play();
@@ -875,24 +923,7 @@ async function playStory() {
     if (currentAudioUrl && currentAudioText === currentStoryText && !audioPlayer.ended) {
       audioPlayer.playbackRate = Number(speedSelect.value);
     } else {
-      const result = await postApi("/api/audio", currentStoryText);
-      console.log("Datos recibidos del backend:", result);
-      window.wordBoundaries = result?.word_boundaries;
-      console.log("Tiempos recibidos:", result?.word_boundaries);
-      if (
-        typeof result?.audio_base64 !== "string"
-        || !Array.isArray(result?.word_boundaries)
-        || !result.word_boundaries.every((boundary) => (
-          typeof boundary?.text === "string"
-          && Number.isFinite(boundary.start)
-        ))
-      ) {
-        throw new Error("El servidor devolvió una respuesta de audio inválida.");
-      }
-
-      const binary = atob(result.audio_base64);
-      const audioBytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-      const audioBlob = new Blob([audioBytes], { type: "audio/mpeg" });
+      const audioBlob = await postAudio(currentStoryText);
       stopKaraoke();
       stopKaraoke = () => {};
       if (currentAudioUrl) {
@@ -900,9 +931,12 @@ async function playStory() {
       }
       currentAudioUrl = URL.createObjectURL(audioBlob);
       currentAudioText = currentStoryText;
-      currentAudioBase64 = result.audio_base64;
-      currentWordBoundaries = result.word_boundaries;
-      audioPlayer.src = currentAudioUrl;
+      await loadAudioMetadata(audioPlayer, currentAudioUrl);
+      currentWordBoundaries = estimateWordBoundaries(
+        currentStoryText,
+        audioPlayer.duration,
+      );
+      window.wordBoundaries = currentWordBoundaries;
       audioPlayer.currentTime = 0;
       audioPlayer.playbackRate = Number(speedSelect.value);
       stopKaraoke = startKaraoke(wordElements);

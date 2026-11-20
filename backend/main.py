@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import tempfile
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Literal
@@ -8,12 +9,16 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request as URLRequest, urlopen
 
+import edge_tts
+from edge_tts.exceptions import EdgeTTSException
 from google import genai
 from google.genai import errors
 from google.genai import types
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
 app = FastAPI()
@@ -25,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-ELEVENLABS_VOICE_ID = "XTyroWkQl32ZSd3rRVZ1"
+EDGE_TTS_VOICE = "fr-CA-AntoineNeural"
 GEMINI_API_KEYS = [
     key.strip()
     for key in os.environ.get("GEMINI_API_KEYS", "").split(",")
@@ -164,9 +169,11 @@ def read_root():
     return {"message": "Backend de Lire des Histoires listo"}
 
 
-def request_elevenlabs_audio(audio_request: URLRequest) -> bytes:
-    with urlopen(audio_request, timeout=90) as response:
-        return response.read()
+def remove_temp_audio_file(file_path: str) -> None:
+    try:
+        os.remove(file_path)
+    except FileNotFoundError:
+        pass
 
 
 @app.post("/api/audio")
@@ -175,141 +182,36 @@ async def generate_audio(request: TextRequest):
     if not text:
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío.")
 
-    api_key = os.environ.get("ELEVENLABS_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="El backend requiere la variable ELEVENLABS_API_KEY.",
-        )
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as audio_file:
+        file_path = audio_file.name
 
-    audio_request = URLRequest(
-        (
-            "https://api.elevenlabs.io/v1/text-to-speech/"
-            f"{ELEVENLABS_VOICE_ID}/with-timestamps?output_format=mp3_44100_128"
-        ),
-        data=json.dumps(
-            {
-                "text": text,
-                "model_id": "eleven_multilingual_v2",
-                "voice_settings": {
-                    "stability": 0.5,
-                },
-            }
-        ).encode("utf-8"),
-        method="POST",
-        headers={
-            "xi-api-key": api_key,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-    )
-
+    audio_generated = False
     try:
-        print(
-            "Generando audio con ElevenLabs "
-            f"(voz {ELEVENLABS_VOICE_ID}, modelo eleven_multilingual_v2)."
-        )
-        response_body = await run_in_threadpool(request_elevenlabs_audio, audio_request)
-        result = json.loads(response_body)
-    except HTTPError as error:
-        print(f"ElevenLabs respondió HTTP {error.code} al generar audio.")
+        print(f"Generando audio con edge-tts (voz {EDGE_TTS_VOICE}).")
+        communicator = edge_tts.Communicate(text, EDGE_TTS_VOICE)
+        await communicator.save(file_path)
+        audio_generated = True
+    except (EdgeTTSException, OSError, TimeoutError) as error:
+        print(f"Error generando audio con edge-tts: {error}")
         raise HTTPException(
             status_code=502,
-            detail=f"ElevenLabs no pudo generar el audio (HTTP {error.code}).",
+            detail="No se pudo generar el audio con edge-tts.",
         ) from error
-    except URLError as error:
-        print(f"Error de conexión con ElevenLabs: {error.reason}")
-        raise HTTPException(
-            status_code=502,
-            detail="No se pudo conectar con ElevenLabs para generar el audio.",
-        ) from error
-    except json.JSONDecodeError as error:
-        raise HTTPException(
-            status_code=502,
-            detail="ElevenLabs devolvió una respuesta de audio inválida.",
-        ) from error
+    finally:
+        if not audio_generated:
+            remove_temp_audio_file(file_path)
 
-    audio_base64 = result.get("audio_base64") if isinstance(result, dict) else None
-    alignment = result.get("alignment") if isinstance(result, dict) else None
-    characters = alignment.get("characters") if isinstance(alignment, dict) else None
-    start_times = (
-        alignment.get("character_start_times_seconds")
-        if isinstance(alignment, dict)
-        else None
+    if os.path.getsize(file_path) == 0:
+        remove_temp_audio_file(file_path)
+        raise HTTPException(status_code=502, detail="edge-tts devolvió un archivo de audio vacío.")
+
+    print("edge-tts generó correctamente el archivo de audio.")
+    return FileResponse(
+        file_path,
+        media_type="audio/mpeg",
+        filename="historia.mp3",
+        background=BackgroundTask(remove_temp_audio_file, file_path),
     )
-    end_times = (
-        alignment.get("character_end_times_seconds")
-        if isinstance(alignment, dict)
-        else None
-    )
-    if (
-        not isinstance(audio_base64, str)
-        or not audio_base64
-        or not isinstance(characters, list)
-        or not isinstance(start_times, list)
-        or not isinstance(end_times, list)
-        or not characters
-        or len(characters) != len(start_times)
-        or len(characters) != len(end_times)
-    ):
-        raise HTTPException(
-            status_code=502,
-            detail="ElevenLabs no devolvió audio y tiempos de palabras válidos.",
-        )
-
-    word_boundaries = []
-    current_word = []
-    word_start = None
-    word_end = None
-    for character, start, end in zip(characters, start_times, end_times):
-        if (
-            not isinstance(character, str)
-            or len(character) != 1
-            or not isinstance(start, (int, float))
-            or not isinstance(end, (int, float))
-            or not math.isfinite(start)
-            or not math.isfinite(end)
-        ):
-            raise HTTPException(
-                status_code=502,
-                detail="ElevenLabs devolvió tiempos de alineación inválidos.",
-            )
-
-        if character.isspace():
-            if current_word:
-                word_boundaries.append(
-                    {
-                        "text": "".join(current_word),
-                        "start": word_start,
-                        "duration": word_end - word_start,
-                    }
-                )
-                current_word = []
-                word_start = None
-                word_end = None
-        else:
-            if not current_word:
-                word_start = start
-            current_word.append(character)
-            word_end = end
-
-    if current_word:
-        word_boundaries.append(
-            {
-                "text": "".join(current_word),
-                "start": word_start,
-                "duration": word_end - word_start,
-            }
-        )
-
-    if not word_boundaries:
-        raise HTTPException(status_code=502, detail="ElevenLabs no devolvió tiempos de palabras.")
-
-    print("ElevenLabs generó correctamente el audio.")
-    return {
-        "audio_base64": audio_base64,
-        "word_boundaries": word_boundaries,
-    }
 
 
 @app.post("/api/generate_flashcard")
