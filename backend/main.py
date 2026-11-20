@@ -607,12 +607,16 @@ async def generate_quiz(request: QuizRequest):
         "Es OBLIGATORIO que generes 5 preguntas de comprensión lectora completamente "
         "diferentes a las anteriores. Varía los personajes, las acciones y las "
         "estructuras. No repitas preguntas ni opciones. "
+        "Asigna a cada pregunta un tema muy específico y breve, como "
+        "'Gramática: Passé Composé', 'Vocabulario: La fábrica' o "
+        "'Comprensión: motivación del personaje'. "
         f"Eres un profesor de francés. Lee este texto: '{text}'. Genera exactamente "
         "5 preguntas de comprensión lectora en francés. Para cada pregunta, devuelve un JSON "
         "estricto con esta estructura: "
         '[{"pregunta": "...", "opciones": ["A", "B", "C", "D"], '
         '"respuesta_correcta": "A", "explicacion": "Breve explicación en español '
         'de por qué es la respuesta correcta basada en el texto", '
+        '"tema": "Categoría específica y breve de la pregunta", '
         '"oracion_contexto": "Oración completa y nueva en francés que use la misma '
         'palabra clave o estructura gramatical", '
         '"traduccion_contexto": "Traducción al español de la oración de contexto"}]'
@@ -680,6 +684,7 @@ async def generate_quiz(request: QuizRequest):
         options = question.get("opciones")
         correct_answer = question.get("respuesta_correcta")
         explanation = question.get("explicacion")
+        topic = question.get("tema")
         context_sentence = question.get("oracion_contexto")
         context_translation = question.get("traduccion_contexto")
         if (
@@ -692,6 +697,9 @@ async def generate_quiz(request: QuizRequest):
             or correct_answer.strip() not in [option.strip() for option in options]
             or not isinstance(explanation, str)
             or not explanation.strip()
+            or not isinstance(topic, str)
+            or not topic.strip()
+            or len(topic.strip()) > 120
             or not isinstance(context_sentence, str)
             or not context_sentence.strip()
             or not isinstance(context_translation, str)
@@ -705,6 +713,7 @@ async def generate_quiz(request: QuizRequest):
                 "opciones": [option.strip() for option in options],
                 "respuesta_correcta": correct_answer.strip(),
                 "explicacion": explanation.strip(),
+                "tema": topic.strip(),
                 "oracion_contexto": context_sentence.strip(),
                 "traduccion_contexto": context_translation.strip(),
             }

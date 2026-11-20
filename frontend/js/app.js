@@ -647,6 +647,8 @@ function validateQuizQuestions(result) {
       || !question.opciones.some((option) => option.trim() === question.respuesta_correcta.trim())
       || typeof question.explicacion !== "string"
       || !question.explicacion.trim()
+      || typeof question.tema !== "string"
+      || !question.tema.trim()
       || typeof question.oracion_contexto !== "string"
       || !question.oracion_contexto.trim()
       || typeof question.traduccion_contexto !== "string"
@@ -660,6 +662,7 @@ function validateQuizQuestions(result) {
       opciones: question.opciones.map((option) => option.trim()),
       respuesta_correcta: question.respuesta_correcta.trim(),
       explicacion: question.explicacion.trim(),
+      tema: question.tema.trim(),
       oracion_contexto: question.oracion_contexto.trim(),
       traduccion_contexto: question.traduccion_contexto.trim(),
     };
@@ -860,7 +863,7 @@ async function showNextQuizQuestion() {
       await postAttempt(
         "quiz",
         selectedAnswer === question.respuesta_correcta,
-        storyTitle(currentStoryText),
+        question.tema,
         currentStoryId,
       );
       quizAttemptSaved = true;
