@@ -443,10 +443,10 @@ async def generate_quiz(request: QuizRequest):
 
     print("Ejecutando Gemini para generar preguntas de comprensión.")
     try:
-        print("Usando modelo Gemini: gemini-3.5-flash-lite (API v1beta).")
+        print("Usando modelo Gemini: gemini-3.8-flash (API v1beta).")
         response = await generate_content_with_key_rotation(
             prompt,
-            "gemini-3.5-flash-lite",
+            "gemini-3.8-flash",
             types.GenerateContentConfig(
                 temperature=0.9,
                 response_mime_type="application/json",
