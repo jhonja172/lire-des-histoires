@@ -188,7 +188,11 @@ async def generate_audio(request: TextRequest):
     audio_generated = False
     try:
         print(f"Generando audio con edge-tts (voz {EDGE_TTS_VOICE}).")
-        communicator = edge_tts.Communicate(text, EDGE_TTS_VOICE)
+        communicator = edge_tts.Communicate(
+            text,
+            EDGE_TTS_VOICE,
+            rate="-15%",
+        )
         await communicator.save(file_path)
         audio_generated = True
     except (EdgeTTSException, OSError, TimeoutError) as error:

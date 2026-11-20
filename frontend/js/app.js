@@ -289,6 +289,17 @@ function renderStoryList() {
     titleButton.addEventListener("click", () => openStory(story));
     item.append(titleButton);
 
+    const quizButton = document.createElement("button");
+    quizButton.type = "button";
+    quizButton.className = "primary-button story-quiz-button";
+    quizButton.textContent = "Hacer Quiz";
+    quizButton.setAttribute("aria-label", `Hacer Quiz: ${storyTitle(story.content)}`);
+    quizButton.addEventListener("click", () => {
+      currentStoryText = story.content.trim();
+      void openQuiz();
+    });
+    item.append(quizButton);
+
     if (story.created_at) {
       const date = document.createElement("time");
       date.className = "story-date";
