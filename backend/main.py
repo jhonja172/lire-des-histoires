@@ -538,9 +538,8 @@ async def generate_quiz(request: QuizRequest):
 
     prompt = (
         "Es OBLIGATORIO que generes 5 preguntas de comprensión lectora completamente "
-        "diferentes a las que hayas generado en intentos anteriores. Varía los enfoques, "
-        "pregunta por diferentes personajes, diferentes acciones y diferentes detalles "
-        "del texto. No repitas preguntas ni estructuras. "
+        "diferentes a las anteriores. Varía los personajes, las acciones y las "
+        "estructuras. No repitas preguntas ni opciones. "
         f"Eres un profesor de francés. Lee este texto: '{text}'. Genera exactamente "
         "5 preguntas de comprensión lectora en francés. Para cada pregunta, devuelve un JSON "
         "estricto con esta estructura: "
