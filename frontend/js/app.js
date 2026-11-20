@@ -240,14 +240,23 @@ async function postFlashcardSchedule(flashcardId, rating) {
 }
 
 async function postAttempt(tipo, acierto, tema, historiaId = null) {
+  const normalizedTema = typeof tema === "string" ? tema.trim() : "";
+  const normalizedHistoriaId = typeof historiaId === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(historiaId)
+    ? historiaId
+    : null;
+  if (!["quiz", "flashcard"].includes(tipo) || typeof acierto !== "boolean" || !normalizedTema) {
+    throw new Error("Los datos del intento no son válidos.");
+  }
+
   const response = await fetch(`${API_URL}/api/guardar_intento`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       tipo,
       acierto,
-      tema,
-      historia_id: historiaId,
+      tema: normalizedTema,
+      historia_id: normalizedHistoriaId,
     }),
   });
 

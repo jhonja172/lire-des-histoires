@@ -165,7 +165,7 @@ class AttemptRequest(BaseModel):
     tipo: Literal["quiz", "flashcard"]
     acierto: bool
     tema: str = Field(..., min_length=1, max_length=500)
-    historia_id: UUID | None = None
+    historia_id: UUID | None = Field(default=None)
 
 
 def supabase_request(path: str, method: str = "GET", payload: dict | None = None) -> bytes:
@@ -537,11 +537,12 @@ async def generate_quiz(request: QuizRequest):
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío.")
 
     prompt = (
+        "Es OBLIGATORIO que generes 5 preguntas de comprensión lectora completamente "
+        "diferentes a las que hayas generado en intentos anteriores. Varía los enfoques, "
+        "pregunta por diferentes personajes, diferentes acciones y diferentes detalles "
+        "del texto. No repitas preguntas ni estructuras. "
         f"Eres un profesor de francés. Lee este texto: '{text}'. Genera exactamente "
-        "5 preguntas de comprensión lectora en francés. "
-        "Es OBLIGATORIO que generes preguntas completamente diferentes cada vez. "
-        "Varía los enfoques, los personajes y las estructuras gramaticales. "
-        "No repitas preguntas anteriores. Para cada pregunta, devuelve un JSON "
+        "5 preguntas de comprensión lectora en francés. Para cada pregunta, devuelve un JSON "
         "estricto con esta estructura: "
         '[{"pregunta": "...", "opciones": ["A", "B", "C", "D"], '
         '"respuesta_correcta": "A", "explicacion": "Breve explicación en español '
