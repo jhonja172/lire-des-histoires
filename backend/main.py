@@ -191,6 +191,9 @@ async def generate_audio(request: TextRequest):
             {
                 "text": text,
                 "model_id": "eleven_multilingual_v2",
+                "voice_settings": {
+                    "stability": 0.5,
+                },
             }
         ).encode("utf-8"),
         method="POST",
@@ -202,6 +205,10 @@ async def generate_audio(request: TextRequest):
     )
 
     try:
+        print(
+            "Generando audio con ElevenLabs "
+            f"(voz {ELEVENLABS_VOICE_ID}, modelo eleven_multilingual_v2)."
+        )
         response_body = await run_in_threadpool(request_elevenlabs_audio, audio_request)
         result = json.loads(response_body)
     except HTTPError as error:
@@ -298,6 +305,7 @@ async def generate_audio(request: TextRequest):
     if not word_boundaries:
         raise HTTPException(status_code=502, detail="ElevenLabs no devolvió tiempos de palabras.")
 
+    print("ElevenLabs generó correctamente el audio.")
     return {
         "audio_base64": audio_base64,
         "word_boundaries": word_boundaries,
