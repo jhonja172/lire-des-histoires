@@ -9,6 +9,7 @@ from typing import Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request as URLRequest, urlopen
+from uuid import UUID
 
 import edge_tts
 from edge_tts.exceptions import EdgeTTSException
@@ -21,6 +22,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
+from supabase import create_client
 
 app = FastAPI()
 
@@ -157,6 +159,13 @@ class FlashcardValidationRequest(BaseModel):
 class FlashcardScheduleRequest(BaseModel):
     flashcard_id: int = Field(..., gt=0)
     rating: Literal[1, 2, 3, 4]
+
+
+class AttemptRequest(BaseModel):
+    tipo: Literal["quiz", "flashcard"]
+    acierto: bool
+    tema: str = Field(..., min_length=1, max_length=500)
+    historia_id: UUID | None = None
 
 
 def supabase_request(path: str, method: str = "GET", payload: dict | None = None) -> bytes:
@@ -471,6 +480,54 @@ async def save_flashcard(request: FlashcardSaveRequest):
         )
 
     return {"flashcard": saved_rows[0]}
+
+
+def insert_attempt(payload: dict) -> dict:
+    supabase_url = os.environ.get("SUPABASE_URL")
+    service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not service_role_key:
+        raise HTTPException(
+            status_code=500,
+            detail="El backend requiere SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY.",
+        )
+
+    response = (
+        create_client(supabase_url, service_role_key)
+        .table("historial_intentos")
+        .insert(payload)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(
+            status_code=502,
+            detail="Supabase no confirmó el guardado del intento.",
+        )
+    return response.data[0]
+
+
+@app.post("/api/guardar_intento")
+async def save_attempt(request: AttemptRequest):
+    payload = {
+        "tipo": request.tipo,
+        "acierto": request.acierto,
+        "tema": request.tema.strip(),
+        "historia_id": str(request.historia_id) if request.historia_id else None,
+    }
+    if not payload["tema"]:
+        raise HTTPException(status_code=400, detail="El tema no puede estar vacío.")
+
+    try:
+        saved_attempt = await run_in_threadpool(insert_attempt, payload)
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"Error guardando intento en Supabase: {error}")
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo guardar el intento en Supabase.",
+        ) from error
+
+    return {"intento": saved_attempt}
 
 
 @app.post("/api/generar_preguntas")

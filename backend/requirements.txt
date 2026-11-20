@@ -4,3 +4,4 @@ edge-tts
 google-genai
 pydantic
 starlette
+supabase

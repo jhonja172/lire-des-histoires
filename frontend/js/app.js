@@ -78,6 +78,7 @@ window.audioPlayer = audioPlayer;
 
 let stories = [];
 let currentStoryText = "";
+let currentStoryId = null;
 let currentAudioText = null;
 let currentAudioUrl = null;
 let currentWordBoundaries = [];
@@ -98,11 +99,14 @@ let currentQuestionIndex = 0;
 let selectedAnswer = null;
 let quizCorrectCount = 0;
 let quizContextSaved = false;
+let quizAttemptSaved = false;
 let quizAudio = null;
 let quizAudioUrl = null;
 let quizAudioController = null;
 let quizAudioRequestId = 0;
 let activeQuizAudioButton = null;
+let flashcardAttemptSaved = false;
+let flashcardAttemptRating = null;
 
 async function readApiError(response) {
   const body = await response.text();
@@ -235,6 +239,29 @@ async function postFlashcardSchedule(flashcardId, rating) {
   return response.json();
 }
 
+async function postAttempt(tipo, acierto, tema, historiaId = null) {
+  const response = await fetch(`${API_URL}/api/guardar_intento`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tipo,
+      acierto,
+      tema,
+      historia_id: historiaId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+
+  const result = await response.json();
+  if (!result?.intento) {
+    throw new Error("El servidor no confirmó el guardado del intento.");
+  }
+  return result.intento;
+}
+
 async function translateText(text, parentSignal) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 120000);
@@ -303,6 +330,7 @@ function renderStoryList() {
     quizButton.setAttribute("aria-label", `Hacer Quiz: ${storyTitle(story.content)}`);
     quizButton.addEventListener("click", () => {
       currentStoryText = story.content.trim();
+      currentStoryId = story.id ? String(story.id) : null;
       void openQuiz();
     });
     item.append(quizButton);
@@ -497,6 +525,7 @@ function openStory(story) {
   closeDictionaryModal();
   stopCurrentAudio();
   currentStoryText = story.content.trim();
+  currentStoryId = story.id ? String(story.id) : null;
   readerTitle.textContent = storyTitle(story.content);
   readerLines.replaceChildren();
   wordElements = [];
@@ -594,6 +623,7 @@ function renderQuizQuestions(questions) {
   selectedAnswer = null;
   quizCorrectCount = 0;
   quizContextSaved = false;
+  quizAttemptSaved = false;
   renderCurrentQuizQuestion();
 }
 
@@ -692,6 +722,7 @@ function renderCurrentQuizQuestion() {
     ? "Ver resultados"
     : "Siguiente";
   quizOptions.replaceChildren();
+  quizAttemptSaved = false;
 
   for (const option of question.opciones) {
     const optionRow = document.createElement("div");
@@ -751,6 +782,24 @@ async function showNextQuizQuestion() {
   }
 
   const question = quizQuestions[currentQuestionIndex];
+  if (!quizAttemptSaved) {
+    quizNextButton.disabled = true;
+    try {
+      await postAttempt(
+        "quiz",
+        selectedAnswer === question.respuesta_correcta,
+        storyTitle(currentStoryText),
+        currentStoryId,
+      );
+      quizAttemptSaved = true;
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "No se pudo guardar el intento del Quiz.", true);
+      quizNextButton.disabled = false;
+      quizNextButton.textContent = "Reintentar guardado";
+      return;
+    }
+  }
+
   if (selectedAnswer !== question.respuesta_correcta && !quizContextSaved) {
     quizNextButton.disabled = true;
     quizNextButton.textContent = "Guardando...";
@@ -862,6 +911,7 @@ async function openQuiz() {
 
     if (stories.length === 1) {
       currentStoryText = stories[0].content.trim();
+      currentStoryId = stories[0].id ? String(stories[0].id) : null;
       await startQuiz(currentStoryText);
       return;
     }
@@ -899,6 +949,8 @@ function stopFlashcardAudio() {
 
 function renderCurrentFlashcard() {
   const flashcard = flashcards[currentFlashcardIndex];
+  flashcardAttemptSaved = false;
+  flashcardAttemptRating = null;
   deleteFlashcardButton.disabled = false;
   flashcardAudioButton.disabled = false;
   flashcardsEmpty.hidden = Boolean(flashcard);
@@ -1104,6 +1156,7 @@ startQuizButton.addEventListener("click", () => {
   }
 
   currentStoryText = story.content.trim();
+  currentStoryId = story.id ? String(story.id) : null;
   void startQuiz(currentStoryText);
 });
 addTextButton.addEventListener("click", () => {
@@ -1225,6 +1278,16 @@ flashcardRatingButtons.addEventListener("click", async (event) => {
   flashcardFeedback.textContent = "Guardando el próximo repaso…";
   flashcardFeedback.removeAttribute("data-state");
   try {
+    if (!flashcardAttemptSaved || flashcardAttemptRating !== rating) {
+      await postAttempt(
+        "flashcard",
+        rating >= 3,
+        flashcard.frase_francesa.slice(0, 500),
+      );
+      flashcardAttemptSaved = true;
+      flashcardAttemptRating = rating;
+    }
+
     const result = await postFlashcardSchedule(flashcard.id, rating);
     if (!Number.isInteger(result?.days_until_review) || result.days_until_review < 0) {
       throw new Error("El servidor devolvió un intervalo de repaso inválido.");
@@ -1257,7 +1320,7 @@ flashcardRatingButtons.addEventListener("click", async (event) => {
     showAnswerButton.disabled = false;
     flashcardFeedback.textContent = error instanceof Error
       ? error.message
-      : "No se pudo programar el repaso.";
+      : "No se pudo guardar la valoración de la flashcard.";
     flashcardFeedback.dataset.state = "incorrect";
   }
 });
