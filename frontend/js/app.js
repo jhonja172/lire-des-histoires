@@ -33,6 +33,7 @@ const quizQuestionProgress = document.querySelector("#quiz-question-progress");
 const quizQuestionCard = document.querySelector("#quiz-question-card");
 const quizQuestionNumber = document.querySelector("#quiz-question-number");
 const quizQuestionText = document.querySelector("#quiz-question-text");
+const quizQuestionAudioButton = document.querySelector("#quiz-question-audio-button");
 const quizOptions = document.querySelector("#quiz-options");
 const quizAnswerFeedback = document.querySelector("#quiz-answer-feedback");
 const quizExplanation = document.querySelector("#quiz-explanation");
@@ -97,6 +98,11 @@ let currentQuestionIndex = 0;
 let selectedAnswer = null;
 let quizCorrectCount = 0;
 let quizContextSaved = false;
+let quizAudio = null;
+let quizAudioUrl = null;
+let quizAudioController = null;
+let quizAudioRequestId = 0;
+let activeQuizAudioButton = null;
 
 async function readApiError(response) {
   const body = await response.text();
@@ -129,11 +135,12 @@ async function postApi(path, text, signal) {
   return response.json();
 }
 
-async function postAudio(text) {
+async function postAudio(text, signal) {
   const response = await fetch(`${API_URL}/api/audio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, rate: "-15%" }),
+    signal,
   });
 
   if (!response.ok) {
@@ -590,9 +597,76 @@ function renderQuizQuestions(questions) {
   renderCurrentQuizQuestion();
 }
 
+function stopQuizAudio() {
+  quizAudioRequestId += 1;
+  quizAudioController?.abort();
+  quizAudioController = null;
+  if (quizAudio) {
+    quizAudio.onended = null;
+    quizAudio.onerror = null;
+    quizAudio.pause();
+    quizAudio.removeAttribute("src");
+    quizAudio.load();
+    quizAudio = null;
+  }
+  if (quizAudioUrl) {
+    URL.revokeObjectURL(quizAudioUrl);
+    quizAudioUrl = null;
+  }
+  if (activeQuizAudioButton) {
+    activeQuizAudioButton.disabled = false;
+    activeQuizAudioButton.removeAttribute("data-audio-state");
+    activeQuizAudioButton.removeAttribute("aria-busy");
+    activeQuizAudioButton = null;
+  }
+}
+
+async function playQuizAudio(text, button) {
+  stopQuizAudio();
+  const requestId = quizAudioRequestId;
+  const controller = new AbortController();
+  quizAudioController = controller;
+  activeQuizAudioButton = button;
+  button.disabled = true;
+  button.dataset.audioState = "loading";
+  button.setAttribute("aria-busy", "true");
+
+  try {
+    const audioBlob = await postAudio(text, controller.signal);
+    if (requestId !== quizAudioRequestId) {
+      return;
+    }
+
+    quizAudioUrl = URL.createObjectURL(audioBlob);
+    quizAudio = new Audio(quizAudioUrl);
+    quizAudio.onended = () => {
+      if (requestId === quizAudioRequestId) {
+        stopQuizAudio();
+      }
+    };
+    quizAudio.onerror = () => {
+      if (requestId === quizAudioRequestId) {
+        setStatus("No se pudo reproducir el audio del Quiz.", true);
+        stopQuizAudio();
+      }
+    };
+    await quizAudio.play();
+    if (requestId === quizAudioRequestId) {
+      button.dataset.audioState = "playing";
+      button.setAttribute("aria-busy", "false");
+    }
+  } catch (error) {
+    if (requestId === quizAudioRequestId) {
+      setStatus(error instanceof Error ? error.message : "No se pudo reproducir el audio.", true);
+      stopQuizAudio();
+    }
+  }
+}
+
 function renderCurrentQuizQuestion() {
   const question = quizQuestions[currentQuestionIndex];
   if (!question) {
+    stopQuizAudio();
     quizQuestionCard.hidden = true;
     quizQuestionProgress.hidden = true;
     quizScore.textContent = `Has acertado ${quizCorrectCount} de ${quizQuestions.length} preguntas.`;
@@ -606,6 +680,9 @@ function renderCurrentQuizQuestion() {
   quizQuestionProgress.textContent = `Pregunta ${currentQuestionIndex + 1} de ${quizQuestions.length}`;
   quizQuestionNumber.textContent = `Pregunta ${currentQuestionIndex + 1}`;
   quizQuestionText.textContent = question.pregunta;
+  quizQuestionAudioButton.onclick = () => {
+    void playQuizAudio(question.pregunta, quizQuestionAudioButton);
+  };
   quizAnswerFeedback.textContent = "";
   quizExplanation.textContent = "";
   quizExplanation.hidden = true;
@@ -617,6 +694,8 @@ function renderCurrentQuizQuestion() {
   quizOptions.replaceChildren();
 
   for (const option of question.opciones) {
+    const optionRow = document.createElement("div");
+    optionRow.className = "quiz-option-row";
     const optionButton = document.createElement("button");
     optionButton.type = "button";
     optionButton.className = "quiz-option";
@@ -649,7 +728,20 @@ function renderCurrentQuizQuestion() {
 
       quizNextButton.disabled = false;
     });
-    quizOptions.append(optionButton);
+    const audioButton = document.createElement("button");
+    audioButton.type = "button";
+    audioButton.className = "quiz-option-audio quiz-audio-button";
+    audioButton.setAttribute("aria-label", `Escuchar opción: ${option}`);
+    const audioIcon = document.createElement("span");
+    audioIcon.className = "quiz-audio-icon";
+    audioIcon.setAttribute("aria-hidden", "true");
+    audioIcon.textContent = "🔊";
+    audioButton.append(audioIcon);
+    audioButton.addEventListener("click", () => {
+      void playQuizAudio(option, audioButton);
+    });
+    optionRow.append(optionButton, audioButton);
+    quizOptions.append(optionRow);
   }
 }
 
@@ -677,6 +769,7 @@ async function showNextQuizQuestion() {
     }
   }
 
+  stopQuizAudio();
   currentQuestionIndex += 1;
   selectedAnswer = null;
   renderCurrentQuizQuestion();
@@ -737,6 +830,7 @@ async function startQuiz(text) {
 
 async function openQuiz() {
   const flowId = ++quizFlowId;
+  stopQuizAudio();
   stopFlashcardAudio();
   quizRequestController?.abort();
   showScreen("quiz");
@@ -995,6 +1089,7 @@ function returnHomeFromQuiz() {
   quizFlowId += 1;
   quizRequestController?.abort();
   quizRequestController = null;
+  stopQuizAudio();
   showScreen("home");
   setStatus("");
 }
