@@ -1,4 +1,3 @@
-import base64
 import json
 import math
 import os
@@ -9,7 +8,6 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request as URLRequest, urlopen
 
-import edge_tts
 from google import genai
 from google.genai import errors
 from google.genai import types
@@ -27,7 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-VOICE = "fr-CA-AntoineNeural"
+ELEVENLABS_VOICE_ID = "XTyroWkQl32ZSd3rRVZ1"
 GEMINI_API_KEYS = [
     key.strip()
     for key in os.environ.get("GEMINI_API_KEYS", "").split(",")
@@ -166,33 +164,140 @@ def read_root():
     return {"message": "Backend de Lire des Histoires listo"}
 
 
+def request_elevenlabs_audio(audio_request: URLRequest) -> bytes:
+    with urlopen(audio_request, timeout=90) as response:
+        return response.read()
+
+
 @app.post("/api/audio")
 async def generate_audio(request: TextRequest):
     text = request.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío.")
 
-    communicator = edge_tts.Communicate(text, VOICE, boundary="WordBoundary")
-    audio_chunks = []
-    word_boundaries = []
+    api_key = os.environ.get("ELEVENLABS_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="El backend requiere la variable ELEVENLABS_API_KEY.",
+        )
 
-    async for chunk in communicator.stream():
-        if chunk["type"] == "audio":
-            audio_chunks.append(chunk["data"])
-        elif chunk["type"] == "WordBoundary":
-            print(f"WordBoundary: {chunk}")
-            word_boundaries.append(
-                {
-                    "text": chunk["text"],
-                    "start": chunk["offset"] / 10_000_000,
-                    "duration": chunk["duration"] / 10_000_000,
-                }
+    audio_request = URLRequest(
+        (
+            "https://api.elevenlabs.io/v1/text-to-speech/"
+            f"{ELEVENLABS_VOICE_ID}/with-timestamps?output_format=mp3_44100_128"
+        ),
+        data=json.dumps(
+            {
+                "text": text,
+                "model_id": "eleven_multilingual_v2",
+            }
+        ).encode("utf-8"),
+        method="POST",
+        headers={
+            "xi-api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+
+    try:
+        response_body = await run_in_threadpool(request_elevenlabs_audio, audio_request)
+        result = json.loads(response_body)
+    except HTTPError as error:
+        print(f"ElevenLabs respondió HTTP {error.code} al generar audio.")
+        raise HTTPException(
+            status_code=502,
+            detail=f"ElevenLabs no pudo generar el audio (HTTP {error.code}).",
+        ) from error
+    except URLError as error:
+        print(f"Error de conexión con ElevenLabs: {error.reason}")
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo conectar con ElevenLabs para generar el audio.",
+        ) from error
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="ElevenLabs devolvió una respuesta de audio inválida.",
+        ) from error
+
+    audio_base64 = result.get("audio_base64") if isinstance(result, dict) else None
+    alignment = result.get("alignment") if isinstance(result, dict) else None
+    characters = alignment.get("characters") if isinstance(alignment, dict) else None
+    start_times = (
+        alignment.get("character_start_times_seconds")
+        if isinstance(alignment, dict)
+        else None
+    )
+    end_times = (
+        alignment.get("character_end_times_seconds")
+        if isinstance(alignment, dict)
+        else None
+    )
+    if (
+        not isinstance(audio_base64, str)
+        or not audio_base64
+        or not isinstance(characters, list)
+        or not isinstance(start_times, list)
+        or not isinstance(end_times, list)
+        or not characters
+        or len(characters) != len(start_times)
+        or len(characters) != len(end_times)
+    ):
+        raise HTTPException(
+            status_code=502,
+            detail="ElevenLabs no devolvió audio y tiempos de palabras válidos.",
+        )
+
+    word_boundaries = []
+    current_word = []
+    word_start = None
+    word_end = None
+    for character, start, end in zip(characters, start_times, end_times):
+        if (
+            not isinstance(character, str)
+            or len(character) != 1
+            or not isinstance(start, (int, float))
+            or not isinstance(end, (int, float))
+            or not math.isfinite(start)
+            or not math.isfinite(end)
+        ):
+            raise HTTPException(
+                status_code=502,
+                detail="ElevenLabs devolvió tiempos de alineación inválidos.",
             )
 
-    if not audio_chunks:
-        raise HTTPException(status_code=502, detail="El servicio de voz no devolvió audio.")
+        if character.isspace():
+            if current_word:
+                word_boundaries.append(
+                    {
+                        "text": "".join(current_word),
+                        "start": word_start,
+                        "duration": word_end - word_start,
+                    }
+                )
+                current_word = []
+                word_start = None
+                word_end = None
+        else:
+            if not current_word:
+                word_start = start
+            current_word.append(character)
+            word_end = end
 
-    audio_base64 = base64.b64encode(b"".join(audio_chunks)).decode("ascii")
+    if current_word:
+        word_boundaries.append(
+            {
+                "text": "".join(current_word),
+                "start": word_start,
+                "duration": word_end - word_start,
+            }
+        )
+
+    if not word_boundaries:
+        raise HTTPException(status_code=502, detail="ElevenLabs no devolvió tiempos de palabras.")
+
     return {
         "audio_base64": audio_base64,
         "word_boundaries": word_boundaries,
@@ -443,13 +548,14 @@ async def generate_quiz(request: QuizRequest):
 
     print("Ejecutando Gemini para generar preguntas de comprensión.")
     try:
-        print("Usando modelo Gemini: gemini-3.8-flash (API v1beta).")
+        print("Usando modelo Gemini: gemini-3.5-flash-lite (API v1beta).")
         response = await generate_content_with_key_rotation(
             prompt,
-            "gemini-3.8-flash",
+            "gemini-3.5-flash-lite",
             types.GenerateContentConfig(
                 temperature=0.9,
                 response_mime_type="application/json",
+                thinking_config=types.ThinkingConfig(thinking_level="LOW"),
             ),
             api_version="v1beta",
         )
