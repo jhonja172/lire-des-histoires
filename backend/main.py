@@ -3,6 +3,7 @@ import math
 import os
 import tempfile
 import time
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Literal
@@ -528,6 +529,72 @@ async def save_attempt(request: AttemptRequest):
         ) from error
 
     return {"intento": saved_attempt}
+
+
+def read_attempt_statistics() -> dict:
+    supabase_url = os.environ.get("SUPABASE_URL")
+    service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not service_role_key:
+        raise HTTPException(
+            status_code=500,
+            detail="El backend requiere SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY.",
+        )
+
+    page_size = 1000
+    table = create_client(supabase_url, service_role_key).table("historial_intentos")
+    first_page = table.select("acierto,tema", count="exact").range(0, page_size - 1).execute()
+    total_respondidas = first_page.count or 0
+    attempts = list(first_page.data or [])
+
+    while len(attempts) < total_respondidas:
+        start = len(attempts)
+        next_page = table.select("acierto,tema").range(start, start + page_size - 1).execute()
+        page = next_page.data or []
+        if not page:
+            raise HTTPException(
+                status_code=502,
+                detail="No se pudo completar la lectura del historial de intentos.",
+            )
+        attempts.extend(page)
+
+    attempts = attempts[:total_respondidas]
+    correct_count = sum(attempt.get("acierto") is True for attempt in attempts)
+    failures_by_topic = Counter(
+        topic.strip()
+        for attempt in attempts
+        if attempt.get("acierto") is False
+        and isinstance((topic := attempt.get("tema")), str)
+        and topic.strip()
+    )
+    weak_topics = [
+        topic
+        for topic, _ in sorted(
+            failures_by_topic.items(),
+            key=lambda item: (-item[1], item[0].casefold()),
+        )[:3]
+    ]
+
+    return {
+        "total_respondidas": total_respondidas,
+        "porcentaje_acierto": round(correct_count / total_respondidas * 100, 2)
+        if total_respondidas
+        else 0.0,
+        "temas_debiles": weak_topics,
+    }
+
+
+@app.get("/api/estadisticas")
+async def get_statistics():
+    try:
+        return await run_in_threadpool(read_attempt_statistics)
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"Error consultando estadísticas en Supabase: {error}")
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudieron cargar las estadísticas.",
+        ) from error
 
 
 @app.post("/api/generar_preguntas")

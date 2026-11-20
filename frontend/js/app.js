@@ -13,6 +13,15 @@ const readerScreen = document.querySelector("#reader-screen");
 const addScreen = document.querySelector("#add-screen");
 const flashcardsScreen = document.querySelector("#flashcards-screen");
 const quizScreen = document.querySelector("#quiz-screen");
+const statisticsScreen = document.querySelector("#statistics-screen");
+const openStatisticsCard = document.querySelector("#open-statistics-card");
+const backHomeFromStatisticsButton = document.querySelector("#back-home-from-statistics");
+const statisticsPercentage = document.querySelector("#statistics-percentage");
+const statisticsProgressTrack = document.querySelector("#statistics-progress-track");
+const statisticsProgressFill = document.querySelector("#statistics-progress-fill");
+const statisticsTotalAnswered = document.querySelector("#statistics-total-answered");
+const statisticsWeakTopics = document.querySelector("#statistics-weak-topics");
+const statisticsNoWeakTopics = document.querySelector("#statistics-no-weak-topics");
 const storyList = document.querySelector("#story-list");
 const emptyLibrary = document.querySelector("#empty-library");
 const statusMessage = document.querySelector("#status-message");
@@ -301,6 +310,7 @@ function showScreen(screenName) {
   addScreen.hidden = screenName !== "add";
   flashcardsScreen.hidden = screenName !== "flashcards";
   quizScreen.hidden = screenName !== "quiz";
+  statisticsScreen.hidden = screenName !== "statistics";
 }
 
 function setStatus(message, isError = false) {
@@ -309,6 +319,59 @@ function setStatus(message, isError = false) {
     statusMessage.dataset.state = "error";
   } else {
     statusMessage.removeAttribute("data-state");
+  }
+}
+
+async function openStatistics() {
+  showScreen("statistics");
+  statisticsWeakTopics.replaceChildren();
+  statisticsNoWeakTopics.hidden = true;
+  setStatus("Cargando estadísticas…");
+
+  try {
+    const response = await fetch(`${API_URL}/api/estadisticas`);
+    if (!response.ok) {
+      throw new Error(await readApiError(response));
+    }
+
+    const statistics = await response.json();
+    if (
+      !Number.isInteger(statistics?.total_respondidas)
+      || statistics.total_respondidas < 0
+      || typeof statistics.porcentaje_acierto !== "number"
+      || !Number.isFinite(statistics.porcentaje_acierto)
+      || !Array.isArray(statistics.temas_debiles)
+      || statistics.temas_debiles.some((topic) => typeof topic !== "string")
+    ) {
+      throw new Error("El servidor devolvió estadísticas inválidas.");
+    }
+
+    const percentage = Math.min(100, Math.max(0, statistics.porcentaje_acierto));
+    const percentageText = `${percentage.toLocaleString("es-ES", {
+      maximumFractionDigits: 2,
+    })}%`;
+    statisticsPercentage.textContent = percentageText;
+    statisticsProgressFill.style.width = `${percentage}%`;
+    statisticsProgressTrack.setAttribute("aria-valuenow", String(percentage));
+    statisticsProgressTrack.setAttribute("aria-valuetext", percentageText);
+    statisticsTotalAnswered.textContent = `Has respondido ${statistics.total_respondidas} preguntas.`;
+
+    const weakTopics = statistics.temas_debiles
+      .filter((topic) => topic.trim())
+      .slice(0, 3);
+    for (const topic of weakTopics) {
+      const item = document.createElement("li");
+      item.className = "story-list-item";
+      item.textContent = topic;
+      statisticsWeakTopics.append(item);
+    }
+    statisticsNoWeakTopics.hidden = weakTopics.length > 0;
+    setStatus("");
+  } catch (error) {
+    setStatus(
+      error instanceof Error ? error.message : "No se pudieron cargar las estadísticas.",
+      true,
+    );
   }
 }
 
@@ -1124,6 +1187,19 @@ openLibraryButton.addEventListener("click", () => {
   stopFlashcardAudio();
   showScreen("library");
   void loadStories();
+});
+openStatisticsCard.addEventListener("click", () => {
+  void openStatistics();
+});
+openStatisticsCard.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    void openStatistics();
+  }
+});
+backHomeFromStatisticsButton.addEventListener("click", () => {
+  showScreen("home");
+  setStatus("");
 });
 openFlashcardsButton.addEventListener("click", () => {
   void openFlashcards();

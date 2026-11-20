@@ -267,7 +267,8 @@ h1 {
 button:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
-.story-word:focus-visible {
+.story-word:focus-visible,
+.progress-card[role="button"]:focus-visible {
   outline: 3px solid rgb(37 99 235 / 30%);
   outline-offset: 3px;
 }
