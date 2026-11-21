@@ -27,7 +27,6 @@ from starlette.concurrency import run_in_threadpool
 from supabase import create_client
 
 app = FastAPI()
-MASTERED_LEVEL_THRESHOLD = 2
 
 app.add_middleware(
     CORSMiddleware,
@@ -576,13 +575,30 @@ def read_attempt_statistics() -> dict:
         attempt.get("acierto") is True for attempt in flashcard_attempts
     )
 
+    flashcard_fronts = {
+        card["frase_francesa"].strip()
+        for card in cards
+        if isinstance(card.get("frase_francesa"), str) and card["frase_francesa"].strip()
+    }
     difficult_cards = Counter(
-        front.strip()
+        topic
         for attempt in flashcard_attempts
         if attempt.get("acierto") is False
-        and isinstance((front := attempt.get("tema")), str)
-        and front.strip()
+        and isinstance((topic := attempt.get("tema")), str)
+        and topic.strip()
     )
+    card_failures = Counter()
+    for topic, failures in difficult_cards.items():
+        if topic in flashcard_fronts:
+            card_failures[topic] += failures
+            continue
+        if len(topic) == 500:
+            matching_fronts = [
+                front for front in flashcard_fronts if front.startswith(topic)
+            ]
+            if len(matching_fronts) == 1:
+                card_failures[matching_fronts[0]] += failures
+
     ranked_cards = []
     for card in cards:
         front = card.get("frase_francesa")
@@ -595,7 +611,7 @@ def read_attempt_statistics() -> dict:
         ranked_cards.append(
             {
                 "frente": front,
-                "fallos": difficult_cards[front],
+                "fallos": card_failures[front],
                 "nivel_dominio": mastery_level,
             }
         )
@@ -607,7 +623,10 @@ def read_attempt_statistics() -> dict:
         )
     )
 
-    category_names = ("Vocabulario", "Gramática", "Comprensión")
+    standard_categories = ("Vocabulario", "Gramática", "Comprensión")
+    category_names = standard_categories + tuple(
+        sorted(set(category_totals) - set(standard_categories), key=str.casefold)
+    )
     return {
         "quiz": {
             "precision_global": round(correct_quiz / total_quiz * 100, 2)
@@ -644,7 +663,7 @@ def read_attempt_statistics() -> dict:
             "tarjetas_dominadas": sum(
                 isinstance(card.get("nivel_dominio"), (int, float))
                 and not isinstance(card.get("nivel_dominio"), bool)
-                and card["nivel_dominio"] >= MASTERED_LEVEL_THRESHOLD
+                and card["nivel_dominio"] > 0
                 for card in cards
             ),
             "total_tarjetas": total_cards,
@@ -682,6 +701,9 @@ def fetch_all_rows(table, columns: str) -> tuple[list[dict], int]:
 
 def classify_quiz_category(topic: object) -> str:
     if not isinstance(topic, str):
+        return "Comprensión"
+    topic = topic.strip()
+    if not topic:
         return "Comprensión"
 
     normalized_topic = "".join(
@@ -723,7 +745,7 @@ def classify_quiz_category(topic: object) -> str:
         )
     ):
         return "Gramática"
-    return "Comprensión"
+    return topic
 
 
 @app.get("/api/estadisticas")
@@ -750,9 +772,12 @@ async def generate_quiz(request: QuizRequest):
         "Es OBLIGATORIO que generes 5 preguntas de comprensión lectora completamente "
         "diferentes a las anteriores. Varía los personajes, las acciones y las "
         "estructuras. No repitas preguntas ni opciones. "
-        "Incluye un campo 'tema' que resuma en 2 o 3 palabras el tema gramatical "
-        "o de vocabulario de la pregunta (ej: 'Passé Composé', "
-        "'Vocabulario de la fábrica', 'Preposiciones de tiempo'). "
+        "Incluye un campo obligatorio 'tema' que resuma en 2 o 3 palabras la "
+        "categoría o el tema concreto de la pregunta (ej: 'Passé Composé', "
+        "'Vocabulario de la fábrica', 'Comprensión', 'Preposiciones de tiempo'). "
+        "Usa claramente 'Vocabulario', 'Gramática' o 'Comprensión' cuando aplique; "
+        "si no puedes clasificarlo claramente, usa el tema específico. No uses el "
+        "título de la historia como tema. "
         f"Eres un profesor de francés. Lee este texto: '{text}'. Genera exactamente "
         "5 preguntas de comprensión lectora en francés. Para cada pregunta, devuelve un JSON "
         "estricto con esta estructura: "

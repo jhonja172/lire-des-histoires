@@ -470,7 +470,7 @@ function renderFlashcardStatistics(flashcardsStats) {
     const front = document.createElement("span");
     front.className = "statistics-difficult-front";
     const difficulty = card.fallos > 0
-      ? `${card.fallos} fallos`
+      ? `${card.fallos} ${card.fallos === 1 ? "fallo" : "fallos"}`
       : `nivel de dominio ${card.nivel_dominio}`;
     front.textContent = `${card.frente} · ${difficulty}`;
     const button = document.createElement("button");
