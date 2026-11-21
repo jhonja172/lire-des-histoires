@@ -565,7 +565,7 @@ def read_attempt_statistics() -> dict:
     for attempt in quiz_attempts:
         raw_topic = attempt.get("tema")
         topic = raw_topic.strip() if isinstance(raw_topic, str) else ""
-        if not topic:
+        if not topic or len(topic.split()) > 3:
             continue
         topic_totals[topic] += 1
         if attempt.get("acierto") is True:
@@ -631,10 +631,14 @@ def read_attempt_statistics() -> dict:
         key=lambda topic: (-topic_totals[topic], topic.casefold()),
     )[:5]
     weakest_quiz_topics = sorted(
-        topic_totals,
+        (
+            topic
+            for topic in topic_totals
+            if topic_totals[topic] > topic_correct[topic]
+        ),
         key=lambda topic: (
-            topic_correct[topic] / topic_totals[topic],
             -(topic_totals[topic] - topic_correct[topic]),
+            topic_correct[topic] / topic_totals[topic],
             topic.casefold(),
         ),
     )[:3]
@@ -738,11 +742,9 @@ async def generate_quiz(request: QuizRequest):
         "Es OBLIGATORIO que generes 5 preguntas de comprensión lectora completamente "
         "diferentes a las anteriores. Varía los personajes, las acciones y las "
         "estructuras. No repitas preguntas ni opciones. "
-        "Cada pregunta debe incluir obligatoriamente el campo 'tema' como una "
-        "etiqueta corta de máximo 3 palabras que identifique el tema gramatical, "
-        "de vocabulario o comprensión de esa pregunta (ejemplos: 'Passé Composé', "
-        "'Vocabulario fábrica', 'Preposiciones'). Nunca uses el título de la "
-        "historia como tema. "
+        "Devuelve el campo 'tema' con una etiqueta gramatical o de vocabulario de "
+        "máximo 3 palabras (Ejemplos: 'Passé Composé', 'Preposiciones', "
+        "'Vocabulario fábrica'). NUNCA devuelvas el título de la historia como tema. "
         f"Eres un profesor de francés. Lee este texto: '{text}'. Genera exactamente "
         "5 preguntas de comprensión lectora en francés. Para cada pregunta, devuelve un JSON "
         "estricto con esta estructura: "

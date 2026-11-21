@@ -445,7 +445,7 @@ function renderQuizBreakdown(categories) {
 
 function renderWeakTopics(topics) {
   const weakTopics = topics
-    .filter((topic) => topic.tema.trim())
+    .filter((topic) => topic.tema.trim() && topic.fallos > 0)
     .slice(0, 3);
   for (const topic of weakTopics) {
     const item = document.createElement("li");
