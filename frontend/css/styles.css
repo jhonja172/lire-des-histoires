@@ -925,7 +925,7 @@ textarea:focus-visible,
 
 .statistics-screen {
   display: grid;
-  gap: 22px;
+  gap: 16px;
 }
 
 .statistics-screen > .back-button,
@@ -946,7 +946,7 @@ textarea:focus-visible,
 
 .statistics-card {
   min-width: 0;
-  padding: clamp(18px, 4vw, 26px);
+  padding: clamp(14px, 3vw, 22px);
   border: 1px solid #e8ebf0;
   border-radius: 18px;
   background: linear-gradient(145deg, #fff, #f8faff);
@@ -955,12 +955,12 @@ textarea:focus-visible,
 
 .statistics-card h2,
 .statistics-card h3 {
-  margin: 0 0 18px;
+  margin: 0 0 12px;
   color: #172033;
 }
 
 .statistics-card h2 {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
 }
 
 .statistics-card h3 {
@@ -1020,22 +1020,31 @@ textarea:focus-visible,
 
 .statistics-sections {
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 
 .statistics-breakdown,
 .statistics-tags,
 .statistics-difficult-cards {
   display: grid;
-  gap: 14px;
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+.statistics-breakdown {
+  max-height: 230px;
+  overflow-y: auto;
+  padding-right: 8px;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+}
+
 .statistics-breakdown-item {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .statistics-breakdown-heading {
@@ -1044,7 +1053,7 @@ textarea:focus-visible,
   justify-content: space-between;
   gap: 12px;
   color: #445066;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
 }
 
 .statistics-breakdown-heading strong {
@@ -1078,12 +1087,12 @@ textarea:focus-visible,
 }
 
 .statistics-tag {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 1px solid #fed7aa;
   border-radius: 999px;
   background: #fff7ed;
   color: #c2410c;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 

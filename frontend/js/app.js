@@ -356,7 +356,10 @@ async function openStatistics() {
         typeof category?.categoria !== "string" || !isValidPercentage(category?.porcentaje))
       || !Array.isArray(quiz?.puntos_debiles)
       || quiz.puntos_debiles.some((topic) =>
-        typeof topic?.tema !== "string" || !Number.isInteger(topic?.fallos) || topic.fallos < 1)
+        typeof topic?.tema !== "string"
+        || !Number.isInteger(topic?.fallos)
+        || topic.fallos < 0
+        || !isValidPercentage(topic?.porcentaje))
       || !isValidPercentage(flashcardsStats?.tasa_retencion)
       || !Number.isInteger(flashcardsStats?.tarjetas_dominadas)
       || flashcardsStats.tarjetas_dominadas < 0
@@ -447,7 +450,8 @@ function renderWeakTopics(topics) {
   for (const topic of weakTopics) {
     const item = document.createElement("li");
     item.className = "statistics-tag";
-    item.textContent = `${topic.tema} · ${topic.fallos} fallos`;
+    item.textContent =
+      `${topic.tema} · ${formatPercentage(topic.porcentaje)} · ${topic.fallos} fallos`;
     statisticsWeakTopics.append(item);
   }
   statisticsNoWeakTopics.hidden = weakTopics.length > 0;

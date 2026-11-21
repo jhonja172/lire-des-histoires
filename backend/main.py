@@ -7,7 +7,6 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Literal
-import unicodedata
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request as URLRequest, urlopen
@@ -517,6 +516,11 @@ async def save_attempt(request: AttemptRequest):
     }
     if not payload["tema"]:
         raise HTTPException(status_code=400, detail="El tema no puede estar vacío.")
+    if request.tipo == "quiz" and len(payload["tema"].split()) > 3:
+        raise HTTPException(
+            status_code=400,
+            detail="El tema del Quiz debe tener como máximo 3 palabras.",
+        )
 
     try:
         saved_attempt = await run_in_threadpool(insert_attempt, payload)
@@ -556,17 +560,16 @@ def read_attempt_statistics() -> dict:
         attempt for attempt in attempts if attempt.get("tipo") == "flashcard"
     ]
 
-    category_totals = Counter()
-    category_correct = Counter()
-    quiz_failures = Counter()
+    topic_totals = Counter()
+    topic_correct = Counter()
     for attempt in quiz_attempts:
-        topic = attempt.get("tema")
-        category = classify_quiz_category(topic)
-        category_totals[category] += 1
+        raw_topic = attempt.get("tema")
+        topic = raw_topic.strip() if isinstance(raw_topic, str) else ""
+        if not topic:
+            continue
+        topic_totals[topic] += 1
         if attempt.get("acierto") is True:
-            category_correct[category] += 1
-        elif attempt.get("acierto") is False and isinstance(topic, str) and topic.strip():
-            quiz_failures[topic.strip()] += 1
+            topic_correct[topic] += 1
 
     total_quiz = len(quiz_attempts)
     correct_quiz = sum(attempt.get("acierto") is True for attempt in quiz_attempts)
@@ -623,10 +626,18 @@ def read_attempt_statistics() -> dict:
         )
     )
 
-    standard_categories = ("Vocabulario", "Gramática", "Comprensión")
-    category_names = standard_categories + tuple(
-        sorted(set(category_totals) - set(standard_categories), key=str.casefold)
-    )
+    top_quiz_topics = sorted(
+        topic_totals,
+        key=lambda topic: (-topic_totals[topic], topic.casefold()),
+    )[:5]
+    weakest_quiz_topics = sorted(
+        topic_totals,
+        key=lambda topic: (
+            topic_correct[topic] / topic_totals[topic],
+            -(topic_totals[topic] - topic_correct[topic]),
+            topic.casefold(),
+        ),
+    )[:3]
     return {
         "quiz": {
             "precision_global": round(correct_quiz / total_quiz * 100, 2)
@@ -635,22 +646,26 @@ def read_attempt_statistics() -> dict:
             "total_respondidas": total_quiz,
             "desglose": [
                 {
-                    "categoria": category,
+                    "categoria": topic,
                     "porcentaje": round(
-                        category_correct[category] / category_totals[category] * 100,
+                        topic_correct[topic] / topic_totals[topic] * 100,
                         2,
                     )
-                    if category_totals[category]
+                    if topic_totals[topic]
                     else 0.0,
                 }
-                for category in category_names
+                for topic in top_quiz_topics
             ],
             "puntos_debiles": [
-                {"tema": topic, "fallos": failures}
-                for topic, failures in sorted(
-                    quiz_failures.items(),
-                    key=lambda item: (-item[1], item[0].casefold()),
-                )[:3]
+                {
+                    "tema": topic,
+                    "fallos": topic_totals[topic] - topic_correct[topic],
+                    "porcentaje": round(
+                        topic_correct[topic] / topic_totals[topic] * 100,
+                        2,
+                    ),
+                }
+                for topic in weakest_quiz_topics
             ],
         },
         "flashcards": {
@@ -699,55 +714,6 @@ def fetch_all_rows(table, columns: str) -> tuple[list[dict], int]:
     return rows[:total], total
 
 
-def classify_quiz_category(topic: object) -> str:
-    if not isinstance(topic, str):
-        return "Comprensión"
-    topic = topic.strip()
-    if not topic:
-        return "Comprensión"
-
-    normalized_topic = "".join(
-        character
-        for character in unicodedata.normalize("NFKD", topic.casefold())
-        if not unicodedata.combining(character)
-    )
-    if any(keyword in normalized_topic for keyword in ("vocab", "lexique", "lexical")):
-        return "Vocabulario"
-    if any(
-        keyword in normalized_topic
-        for keyword in ("comprehension", "lecture", "personnage", "action", "detail", "histoire")
-    ):
-        return "Comprensión"
-    if any(
-        keyword in normalized_topic
-        for keyword in (
-            "grammaire",
-            "gramatica",
-            "passe compose",
-            "passe simple",
-            "imparfait",
-            "futur",
-            "conditionnel",
-            "subjonctif",
-            "preposition",
-            "preposicion",
-            "verbe",
-            "verbo",
-            "conjugaison",
-            "conjugacion",
-            "accord",
-            "pronom",
-            "pronoun",
-            "adjectif",
-            "adjetivo",
-            "article",
-            "negation",
-        )
-    ):
-        return "Gramática"
-    return topic
-
-
 @app.get("/api/estadisticas")
 async def get_statistics():
     try:
@@ -772,12 +738,11 @@ async def generate_quiz(request: QuizRequest):
         "Es OBLIGATORIO que generes 5 preguntas de comprensión lectora completamente "
         "diferentes a las anteriores. Varía los personajes, las acciones y las "
         "estructuras. No repitas preguntas ni opciones. "
-        "Incluye un campo obligatorio 'tema' que resuma en 2 o 3 palabras la "
-        "categoría o el tema concreto de la pregunta (ej: 'Passé Composé', "
-        "'Vocabulario de la fábrica', 'Comprensión', 'Preposiciones de tiempo'). "
-        "Usa claramente 'Vocabulario', 'Gramática' o 'Comprensión' cuando aplique; "
-        "si no puedes clasificarlo claramente, usa el tema específico. No uses el "
-        "título de la historia como tema. "
+        "Cada pregunta debe incluir obligatoriamente el campo 'tema' como una "
+        "etiqueta corta de máximo 3 palabras que identifique el tema gramatical, "
+        "de vocabulario o comprensión de esa pregunta (ejemplos: 'Passé Composé', "
+        "'Vocabulario fábrica', 'Preposiciones'). Nunca uses el título de la "
+        "historia como tema. "
         f"Eres un profesor de francés. Lee este texto: '{text}'. Genera exactamente "
         "5 preguntas de comprensión lectora en francés. Para cada pregunta, devuelve un JSON "
         "estricto con esta estructura: "
@@ -867,6 +832,7 @@ async def generate_quiz(request: QuizRequest):
             or not explanation.strip()
             or not isinstance(topic, str)
             or not topic.strip()
+            or len(topic.strip().split()) > 3
             or len(topic.strip()) > 120
             or not isinstance(context_sentence, str)
             or not context_sentence.strip()
