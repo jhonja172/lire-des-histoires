@@ -3,7 +3,6 @@ import { startKaraoke } from "./karaoke.js";
 import {
   deleteFlashcard,
   getFlashcards,
-  saveFlashcard,
 } from "./supabase.js";
 
 const API_URL = "https://lire-des-histoires.onrender.com";
@@ -73,7 +72,9 @@ const speedSelect = document.querySelector("#speed-select");
 const dictionaryModal = document.querySelector("#dictionary-modal");
 const modalWord = document.querySelector("#modal-word");
 const modalTranslation = document.querySelector("#modal-translation");
+const dictionaryFeedback = document.querySelector("#dictionary-feedback");
 const closeDictionaryModalButton = document.querySelector("#close-dictionary-modal");
+const listenWordButton = document.querySelector("#listen-word-button");
 const saveDictionaryFlashcardButton = document.querySelector("#save-dictionary-flashcard-button");
 const flashcardPanel = document.querySelector("#flashcard-panel");
 const flashcardCount = document.querySelector("#flashcard-count");
@@ -100,10 +101,9 @@ let currentStoryText = "";
 let currentStoryId = null;
 let currentAudioText = null;
 let currentAudioUrl = null;
-let wordAudioController = null;
-let wordAudioRequestId = 0;
 let wordAudioUrl = null;
-let activeWordAudioElement = null;
+let dictionaryAudio = null;
+let dictionaryAudioController = null;
 let currentWordBoundaries = [];
 window.wordBoundaries = currentWordBoundaries;
 let wordElements = [];
@@ -113,8 +113,9 @@ let flashcardAudioUrl = null;
 let stopKaraoke = () => {};
 let translationController = null;
 let wordLookupController = null;
-let currentDictionaryLine = null;
+let currentDictionaryWordElement = null;
 let currentDictionaryWord = "";
+let currentDictionaryTranslation = "";
 let quizRequestController = null;
 let quizFlowId = 0;
 let quizQuestions = [];
@@ -217,19 +218,6 @@ function estimateWordBoundaries(text, duration) {
     elapsed += wordDuration;
     return { text: word, start, duration: wordDuration };
   });
-}
-
-async function postFlashcardApi(word, paragraph) {
-  const response = await fetch(`${API_URL}/api/generate_flashcard`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ word, paragraph }),
-  });
-
-  if (!response.ok) {
-    throw new Error(await readApiError(response));
-  }
-  return response.json();
 }
 
 async function postFlashcardValidation(userAnswer, correctAnswer, originalText) {
@@ -658,64 +646,142 @@ async function lookupWord(wordElement) {
     return;
   }
 
-  currentDictionaryLine = wordElement.closest(".reader-line");
   currentDictionaryWord = word;
+  stopDictionaryAudio();
+  listenWordButton.textContent = "🔊 Escuchar";
+  currentDictionaryWordElement = wordElement;
+  currentDictionaryTranslation = "";
   wordLookupController?.abort();
   const controller = new AbortController();
   wordLookupController = controller;
-  saveDictionaryFlashcardButton.disabled = !currentDictionaryLine;
-  saveDictionaryFlashcardButton.textContent = "Guardar para estudiar";
+  saveDictionaryFlashcardButton.disabled = true;
+  saveDictionaryFlashcardButton.textContent = "Guardar en Flashcards";
+  listenWordButton.disabled = false;
+  dictionaryFeedback.textContent = "";
   modalWord.textContent = word;
   modalTranslation.textContent = "Buscando traducción…";
   dictionaryModal.hidden = false;
   closeDictionaryModalButton.focus();
 
   try {
-    const translation = await translateText(word, controller.signal);
+    const query = new URLSearchParams({ palabra: word });
+    const response = await fetch(`${API_URL}/api/traducir_palabra?${query}`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(await readApiError(response));
+    }
+    const result = await response.json();
+    if (typeof result?.traduccion_espanola !== "string" || !result.traduccion_espanola.trim()) {
+      throw new Error("El servidor devolvió una traducción inválida.");
+    }
     if (!controller.signal.aborted) {
-      modalTranslation.textContent = translation;
+      currentDictionaryTranslation = result.traduccion_espanola.trim();
+      modalTranslation.textContent = currentDictionaryTranslation;
+      saveDictionaryFlashcardButton.disabled = false;
     }
   } catch (error) {
     if (!controller.signal.aborted) {
       modalTranslation.textContent = error instanceof Error
         ? error.message
         : "No se pudo consultar la palabra.";
+      saveDictionaryFlashcardButton.disabled = true;
     }
   }
 }
 
 async function saveDictionaryFlashcard() {
-  if (!currentDictionaryLine || !currentDictionaryWord) {
-    setStatus("No se encontró la palabra o su línea de contexto.", true);
+  if (!currentDictionaryWord || !currentDictionaryTranslation) {
+    dictionaryFeedback.textContent = "Espera a que se cargue la traducción antes de guardar.";
     return;
   }
 
   saveDictionaryFlashcardButton.disabled = true;
-  saveDictionaryFlashcardButton.textContent = "Creando flashcard…";
-  modalTranslation.textContent = "Gemini está preparando una frase corta y su traducción…";
+  saveDictionaryFlashcardButton.textContent = "Guardando…";
+  dictionaryFeedback.textContent = "";
   try {
-    const result = await postFlashcardApi(
-      currentDictionaryWord,
-      currentDictionaryLine.dataset.frenchText,
-    );
-    if (
-      typeof result?.frase_francesa !== "string"
-      || !result.frase_francesa.trim()
-      || typeof result?.traduccion_espanola !== "string"
-      || !result.traduccion_espanola.trim()
-    ) {
-      throw new Error("El servidor devolvió una flashcard inválida.");
+    const response = await fetch(`${API_URL}/api/save_flashcard`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        frase_francesa: currentDictionaryWord,
+        traduccion_espanola: currentDictionaryTranslation,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(await readApiError(response));
     }
-
-    await saveFlashcard(result.frase_francesa, result.traduccion_espanola);
-    closeDictionaryModal();
-    setStatus("Frase guardada para estudiar.");
+    const result = await response.json();
+    if (!result?.flashcard) {
+      throw new Error("El servidor no confirmó el guardado de la flashcard.");
+    }
+    saveDictionaryFlashcardButton.textContent = "Guardado";
+    dictionaryFeedback.textContent = "Palabra guardada en Flashcards.";
   } catch (error) {
     saveDictionaryFlashcardButton.disabled = false;
-    saveDictionaryFlashcardButton.textContent = "Guardar para estudiar";
+    saveDictionaryFlashcardButton.textContent = "Guardar en Flashcards";
     const message = error instanceof Error ? error.message : "No se pudo guardar la flashcard.";
-    modalTranslation.textContent = message;
+    dictionaryFeedback.textContent = message;
     setStatus(message, true);
+  }
+}
+
+async function playDictionaryWordAudio() {
+  if (!currentDictionaryWord) {
+    return;
+  }
+
+  dictionaryAudioController?.abort();
+  stopDictionaryAudio();
+  const controller = new AbortController();
+  dictionaryAudioController = controller;
+  listenWordButton.disabled = true;
+  listenWordButton.textContent = "Generando audio…";
+  dictionaryFeedback.textContent = "";
+
+  try {
+    const audioBlob = await postAudio(currentDictionaryWord, controller.signal);
+    if (controller.signal.aborted) {
+      return;
+    }
+
+    wordAudioUrl = URL.createObjectURL(audioBlob);
+    dictionaryAudio = new Audio(wordAudioUrl);
+    await dictionaryAudio.play();
+    listenWordButton.textContent = "🔊 Reproduciendo…";
+    dictionaryAudio.addEventListener("ended", () => {
+      stopDictionaryAudio();
+      listenWordButton.disabled = false;
+      listenWordButton.textContent = "🔊 Escuchar";
+    }, { once: true });
+  } catch (error) {
+    if (!controller.signal.aborted) {
+      stopDictionaryAudio();
+      dictionaryFeedback.textContent = error instanceof Error
+        ? error.message
+        : "No se pudo reproducir la palabra.";
+      listenWordButton.disabled = false;
+      listenWordButton.textContent = "🔊 Escuchar";
+    }
+  } finally {
+    if (dictionaryAudioController === controller) {
+      dictionaryAudioController = null;
+    }
+  }
+}
+
+function stopDictionaryAudio() {
+  dictionaryAudioController?.abort();
+  dictionaryAudioController = null;
+  if (dictionaryAudio) {
+    dictionaryAudio.pause();
+    dictionaryAudio.removeAttribute("src");
+    dictionaryAudio.load();
+    dictionaryAudio = null;
+  }
+  if (wordAudioUrl) {
+    URL.revokeObjectURL(wordAudioUrl);
+    wordAudioUrl = null;
   }
 }
 
@@ -725,91 +791,16 @@ function createWordElement(value) {
   word.textContent = value;
   word.tabIndex = 0;
   word.setAttribute("role", "button");
-  word.setAttribute(
-    "aria-label",
-    `Escuchar la pronunciación de ${value}. Alt y clic para consultar la traducción.`,
-  );
-  word.title = "Clic para escuchar; Alt + clic para consultar la traducción.";
-  word.addEventListener("click", (event) => {
-    if (event.altKey) {
-      void lookupWord(word);
-      return;
-    }
-    void playWordAudio(word);
-  });
+  word.setAttribute("aria-label", `Abrir opciones para la palabra ${value}`);
+  word.title = "Consultar, escuchar o guardar esta palabra.";
+  word.addEventListener("click", () => void lookupWord(word));
   word.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      if (event.altKey) {
-        void lookupWord(word);
-      } else {
-        void playWordAudio(word);
-      }
+      void lookupWord(word);
     }
   });
   return word;
-}
-
-async function playWordAudio(wordElement) {
-  const word = stripWordPunctuation(wordElement.textContent);
-  if (!word) {
-    return;
-  }
-
-  stopCurrentAudio();
-  const requestId = ++wordAudioRequestId;
-  const controller = new AbortController();
-  wordAudioController = controller;
-  activeWordAudioElement = wordElement;
-  wordElement.dataset.audioState = "loading";
-  wordElement.setAttribute("aria-busy", "true");
-  setStatus(`Generando pronunciación de “${word}”…`);
-
-  try {
-    const response = await fetch(`${API_URL}/api/audio/palabra`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ word }),
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      throw new Error(await readApiError(response));
-    }
-
-    const audioBlob = await response.blob();
-    if (!audioBlob.size || !audioBlob.type.startsWith("audio/")) {
-      throw new Error("El servidor no devolvió un archivo de audio válido.");
-    }
-    if (requestId !== wordAudioRequestId) {
-      return;
-    }
-
-    wordAudioUrl = URL.createObjectURL(audioBlob);
-    audioPlayer.src = wordAudioUrl;
-    await audioPlayer.play();
-    if (requestId === wordAudioRequestId) {
-      wordElement.dataset.audioState = "playing";
-      wordElement.removeAttribute("aria-busy");
-      setStatus("");
-    }
-  } catch (error) {
-    if (!controller.signal.aborted && requestId === wordAudioRequestId) {
-      wordElement.removeAttribute("data-audio-state");
-      wordElement.removeAttribute("aria-busy");
-      activeWordAudioElement = null;
-      if (wordAudioUrl) {
-        URL.revokeObjectURL(wordAudioUrl);
-        wordAudioUrl = null;
-      }
-      audioPlayer.removeAttribute("src");
-      audioPlayer.load();
-      setStatus(error instanceof Error ? error.message : "No se pudo reproducir la palabra.", true);
-    }
-  } finally {
-    if (wordAudioController === controller) {
-      wordAudioController = null;
-    }
-  }
 }
 
 function renderFrenchLine(paragraph, text, wordElements) {
@@ -868,24 +859,8 @@ async function translateReaderLines(signal) {
 }
 
 function stopCurrentAudio() {
-  const wasWordAudio = activeWordAudioElement !== null;
-  wordAudioRequestId += 1;
-  wordAudioController?.abort();
-  wordAudioController = null;
-  if (activeWordAudioElement) {
-    activeWordAudioElement.removeAttribute("data-audio-state");
-    activeWordAudioElement.removeAttribute("aria-busy");
-    activeWordAudioElement = null;
-  }
-  if (wordAudioUrl) {
-    URL.revokeObjectURL(wordAudioUrl);
-    wordAudioUrl = null;
-  }
+  stopDictionaryAudio();
   audioPlayer.pause();
-  if (wasWordAudio) {
-    audioPlayer.removeAttribute("src");
-    audioPlayer.load();
-  }
   stopKaraoke();
   stopKaraoke = () => {};
   currentAudioText = null;
@@ -1425,9 +1400,12 @@ async function playFlashcardAudio() {
 
 function closeDictionaryModal() {
   wordLookupController?.abort();
+  stopDictionaryAudio();
   dictionaryModal.hidden = true;
-  currentDictionaryLine = null;
+  currentDictionaryWordElement?.focus();
+  currentDictionaryWordElement = null;
   currentDictionaryWord = "";
+  currentDictionaryTranslation = "";
 }
 
 function setPlayingState(isPlaying) {
@@ -1724,6 +1702,9 @@ showAnswerButton.addEventListener("click", () => {
 saveDictionaryFlashcardButton.addEventListener("click", () => {
   void saveDictionaryFlashcard();
 });
+listenWordButton.addEventListener("click", () => {
+  void playDictionaryWordAudio();
+});
 translateButton.addEventListener("click", () => {
   translationController?.abort();
   translationController = new AbortController();
@@ -1753,15 +1734,6 @@ audioPlayer.addEventListener("pause", () => {
 
 audioPlayer.addEventListener("ended", () => {
   stopKaraoke();
-  if (activeWordAudioElement) {
-    activeWordAudioElement.removeAttribute("data-audio-state");
-    activeWordAudioElement.removeAttribute("aria-busy");
-    activeWordAudioElement = null;
-  }
-  if (wordAudioUrl) {
-    URL.revokeObjectURL(wordAudioUrl);
-    wordAudioUrl = null;
-  }
   setPlayingState(false);
   setStatus("Reproducción finalizada.");
 });

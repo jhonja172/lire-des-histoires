@@ -18,7 +18,7 @@ from edge_tts.exceptions import EdgeTTSException
 from google import genai
 from google.genai import errors
 from google.genai import types
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -1050,3 +1050,32 @@ async def translate_text(request: TextRequest):
         raise HTTPException(status_code=500, detail="Gemini no devolvió una traducción.")
 
     return {"translation": response.text}
+
+
+@app.get("/api/traducir_palabra")
+async def translate_word(palabra: str = Query(..., min_length=1, max_length=200)):
+    word = palabra.strip()
+    if not word:
+        raise HTTPException(status_code=400, detail="La palabra no puede estar vacía.")
+
+    prompt = (
+        "Traduce esta palabra francesa al español. Devuelve únicamente su significado "
+        f"más habitual, sin explicaciones ni comillas: {word}"
+    )
+    try:
+        response = await generate_content_with_key_rotation(
+            prompt,
+            "gemini-3.5-flash-lite",
+        )
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"Error traduciendo una palabra con Gemini: {error}")
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo traducir la palabra.",
+        ) from error
+
+    if not response.text or not response.text.strip():
+        raise HTTPException(status_code=502, detail="Gemini no devolvió una traducción.")
+    return {"traduccion_espanola": response.text.strip()}
