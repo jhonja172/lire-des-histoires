@@ -81,7 +81,7 @@ async def generate_content_with_key_rotation(
                     status_code=504,
                     detail="La generación de preguntas tardó demasiado. Inténtalo de nuevo.",
                 )
-            http_options["timeout"] = max(1, int(remaining_seconds * 1000))
+            http_options["timeout"] = max(15_000, int(timeout_seconds * 1000))
             http_options["retry_options"] = types.HttpRetryOptions(attempts=1)
 
         client_options = {"api_key": get_next_gemini_api_key()}
@@ -811,32 +811,38 @@ async def generate_quiz(request: QuizRequest):
                         thinking_config=types.ThinkingConfig(thinking_level="LOW"),
                     ),
                     api_version="v1beta",
-                    timeout_seconds=10,
+                    timeout_seconds=15,
                 )
                 break
             except Exception as error:
                 retryable = (
-                    isinstance(error, TimeoutError)
-                    or (
-                        isinstance(error, errors.APIError)
-                        and error.code in {408, 503, 504}
-                    )
-                    or (
-                        isinstance(error, HTTPException)
-                        and error.status_code in {503, 504}
-                    )
-                    or error.__class__.__name__
-                    in {"TimeoutException", "ConnectTimeout", "ReadTimeout", "GatewayTimeout", "ServiceUnavailable"}
+                    isinstance(error, errors.APIError) and error.code in {429, 503}
+                ) or (
+                    isinstance(error, HTTPException) and error.status_code in {429, 503}
                 )
-                if not retryable:
+                if retryable and attempt == 0:
+                    print("Gemini respondió 429/503; reintento en 2 segundos.")
+                    await asyncio.sleep(2)
+                    continue
+                if retryable:
+                    raise HTTPException(
+                        status_code=503,
+                        detail="El servicio de IA sigue ocupado. Intenta de nuevo.",
+                    ) from error
+                if isinstance(error, HTTPException):
                     raise
-                if attempt == 1:
+                if isinstance(error, TimeoutError) or error.__class__.__name__ in {
+                    "TimeoutException",
+                    "ConnectTimeout",
+                    "ReadTimeout",
+                    "GatewayTimeout",
+                    "ServiceUnavailable",
+                }:
                     raise HTTPException(
                         status_code=504,
                         detail="La IA está tardando demasiado. Intenta de nuevo.",
                     ) from error
-                print("Gemini agotó el timeout o no está disponible; reintento en 2 segundos.")
-                await asyncio.sleep(2)
+                raise
 
         if response is None:
             raise HTTPException(
