@@ -742,6 +742,16 @@ async def generate_quiz(request: QuizRequest):
         "Es OBLIGATORIO que generes 5 preguntas de comprensión lectora completamente "
         "diferentes a las anteriores. Varía los personajes, las acciones y las "
         "estructuras. No repitas preguntas ni opciones. "
+        "Genera preguntas de un nivel avanzado (B2-C1). No te limites a preguntas "
+        "de comprensión literal. Incluye preguntas que requieran inferencia, "
+        "análisis del contexto, comprensión de matices gramaticales (como tiempos "
+        "verbales complejos o estructuras subjuntivas) y vocabulario más sofisticado "
+        "presente en el texto. "
+        "Para evitar repeticiones, concéntrate en generar preguntas sobre aspectos "
+        "del texto que no hayas explorado antes. Varía el foco: si en una pregunta "
+        "anterior te centraste en un personaje, ahora céntrate en otro, en una acción "
+        "secundaria, en una descripción o en una relación causa-efecto. No repitas "
+        "las mismas estructuras de pregunta. "
         "Devuelve el campo 'tema' con una etiqueta gramatical o de vocabulario de "
         "máximo 3 palabras (Ejemplos: 'Passé Composé', 'Preposiciones', "
         "'Vocabulario fábrica'). NUNCA devuelvas el título de la historia como tema. "
@@ -765,7 +775,7 @@ async def generate_quiz(request: QuizRequest):
             prompt,
             "gemini-3.5-flash-lite",
             types.GenerateContentConfig(
-                temperature=0.9,
+                temperature=1.0,
                 response_mime_type="application/json",
                 thinking_config=types.ThinkingConfig(thinking_level="LOW"),
             ),
