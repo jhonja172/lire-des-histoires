@@ -140,7 +140,7 @@ class TextRequest(BaseModel):
 
 class QuizRequest(BaseModel):
     texto: str = Field(..., min_length=1, max_length=5000)
-    nivel: Literal["A1", "B1", "B2"] = "A1"
+    nivel: Literal["A2", "B1", "B2"] = "A2"
 
 
 class FlashcardRequest(BaseModel):
@@ -740,10 +740,11 @@ async def generate_quiz(request: QuizRequest):
     if not text:
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío.")
 
-    if request.nivel == "A1":
+    if request.nivel == "A2":
         level_instruction = (
-            "Nivel A1 (Principiante): formula preguntas de comprensión literal "
-            "sobre información explícita y directa del texto."
+            "Nivel A2 (Principiante): usa vocabulario básico y comprensión de "
+            "información explícita, con preguntas sencillas sobre algunas "
+            "estructuras en pasado."
         )
     elif request.nivel == "B1":
         level_instruction = (
@@ -757,12 +758,12 @@ async def generate_quiz(request: QuizRequest):
             "comprensión de información explícita."
         )
 
-    if request.nivel == "A1":
+    if request.nivel == "A2":
         prompt = (
-            "Eres profesor de francés. Genera exactamente 5 preguntas A1 de "
-            "comprensión literal, usando solo información explícita y frases "
-            "sencillas. No infieras ni agregues análisis. Devuelve únicamente un "
-            "JSON válido con una lista de objetos con estas claves: pregunta, "
+            "Eres profesor de francés. Genera exactamente 5 preguntas A2 de "
+            "comprensión con vocabulario básico e información explícita, incluyendo "
+            "algunas estructuras en pasado. Devuelve únicamente un JSON válido con "
+            "una lista de objetos con estas claves: pregunta, "
             "opciones (4 opciones en francés), respuesta_correcta, explicacion "
             "(breve, en español), tema (etiqueta gramatical o de vocabulario de "
             "máximo 3 palabras; nunca el título), oracion_contexto y "
