@@ -208,7 +208,7 @@ def supabase_request(path: str, method: str = "GET", payload: dict | None = None
         ) from error
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def read_root():
     return {"message": "Backend de Lire des Histoires listo"}
 
