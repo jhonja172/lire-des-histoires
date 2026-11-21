@@ -1,3 +1,4 @@
+import asyncio
 import json
 import math
 import os
@@ -756,46 +757,92 @@ async def generate_quiz(request: QuizRequest):
             "comprensión de información explícita."
         )
 
-    prompt = (
-        "Es OBLIGATORIO que generes 5 preguntas de comprensión lectora completamente "
-        "diferentes a las anteriores. Varía los personajes, las acciones y las "
-        "estructuras. No repitas preguntas ni opciones. "
-        f"{level_instruction} "
-        "Para evitar repeticiones, concéntrate en generar preguntas sobre aspectos "
-        "del texto que no hayas explorado antes. Varía el foco: si en una pregunta "
-        "anterior te centraste en un personaje, ahora céntrate en otro, en una acción "
-        "secundaria, en una descripción o en una relación causa-efecto. No repitas "
-        "las mismas estructuras de pregunta. "
-        "Devuelve el campo 'tema' con una etiqueta gramatical o de vocabulario de "
-        "máximo 3 palabras (Ejemplos: 'Passé Composé', 'Preposiciones', "
-        "'Vocabulario fábrica'). NUNCA devuelvas el título de la historia como tema. "
-        f"Eres un profesor de francés. Lee este texto: '{text}'. Genera exactamente "
-        "5 preguntas de comprensión lectora en francés. Para cada pregunta, devuelve un JSON "
-        "estricto con esta estructura: "
-        '[{"pregunta": "...", "opciones": ["A", "B", "C", "D"], '
-        '"respuesta_correcta": "A", "explicacion": "Breve explicación en español '
-        'de por qué es la respuesta correcta basada en el texto", '
-        '"tema": "Categoría específica y breve de la pregunta", '
-        '"oracion_contexto": "Oración completa y nueva en francés que use la misma '
-        'palabra clave o estructura gramatical", '
-        '"traduccion_contexto": "Traducción al español de la oración de contexto"}]'
-    )
+    if request.nivel == "A1":
+        prompt = (
+            "Eres profesor de francés. Genera exactamente 5 preguntas A1 de "
+            "comprensión literal, usando solo información explícita y frases "
+            "sencillas. No infieras ni agregues análisis. Devuelve únicamente un "
+            "JSON válido con una lista de objetos con estas claves: pregunta, "
+            "opciones (4 opciones en francés), respuesta_correcta, explicacion "
+            "(breve, en español), tema (etiqueta gramatical o de vocabulario de "
+            "máximo 3 palabras; nunca el título), oracion_contexto y "
+            "traduccion_contexto. "
+            f"Texto: {text}"
+        )
+    else:
+        prompt = (
+            "Es OBLIGATORIO que generes 5 preguntas de comprensión lectora completamente "
+            "diferentes a las anteriores. Varía los personajes, las acciones y las "
+            "estructuras. No repitas preguntas ni opciones. "
+            f"{level_instruction} "
+            "Para evitar repeticiones, concéntrate en generar preguntas sobre aspectos "
+            "del texto que no hayas explorado antes. Varía el foco: si en una pregunta "
+            "anterior te centraste en un personaje, ahora céntrate en otro, en una acción "
+            "secundaria, en una descripción o en una relación causa-efecto. No repitas "
+            "las mismas estructuras de pregunta. "
+            "Devuelve el campo 'tema' con una etiqueta gramatical o de vocabulario de "
+            "máximo 3 palabras (Ejemplos: 'Passé Composé', 'Preposiciones', "
+            "'Vocabulario fábrica'). NUNCA devuelvas el título de la historia como tema. "
+            f"Eres un profesor de francés. Lee este texto: '{text}'. Genera exactamente "
+            "5 preguntas de comprensión lectora en francés. Para cada pregunta, devuelve un JSON "
+            "estricto con esta estructura: "
+            '[{"pregunta": "...", "opciones": ["A", "B", "C", "D"], '
+            '"respuesta_correcta": "A", "explicacion": "Breve explicación en español '
+            'de por qué es la respuesta correcta basada en el texto", '
+            '"tema": "Categoría específica y breve de la pregunta", '
+            '"oracion_contexto": "Oración completa y nueva en francés que use la misma '
+            'palabra clave o estructura gramatical", '
+            '"traduccion_contexto": "Traducción al español de la oración de contexto"}]'
+        )
 
     quiz_started_at = time.monotonic()
     print("Ejecutando Gemini para generar preguntas de comprensión.")
     try:
         print("Usando modelo Gemini: gemini-3.5-flash-lite (API v1beta).")
-        response = await generate_content_with_key_rotation(
-            prompt,
-            "gemini-3.5-flash-lite",
-            types.GenerateContentConfig(
-                temperature=1.0,
-                response_mime_type="application/json",
-                thinking_config=types.ThinkingConfig(thinking_level="LOW"),
-            ),
-            api_version="v1beta",
-            timeout_seconds=22,
-        )
+        response = None
+        for attempt in range(2):
+            try:
+                response = await generate_content_with_key_rotation(
+                    prompt,
+                    "gemini-3.5-flash-lite",
+                    types.GenerateContentConfig(
+                        temperature=1.0,
+                        response_mime_type="application/json",
+                        thinking_config=types.ThinkingConfig(thinking_level="LOW"),
+                    ),
+                    api_version="v1beta",
+                    timeout_seconds=10,
+                )
+                break
+            except Exception as error:
+                retryable = (
+                    isinstance(error, TimeoutError)
+                    or (
+                        isinstance(error, errors.APIError)
+                        and error.code in {408, 503, 504}
+                    )
+                    or (
+                        isinstance(error, HTTPException)
+                        and error.status_code in {503, 504}
+                    )
+                    or error.__class__.__name__
+                    in {"TimeoutException", "ConnectTimeout", "ReadTimeout", "GatewayTimeout", "ServiceUnavailable"}
+                )
+                if not retryable:
+                    raise
+                if attempt == 1:
+                    raise HTTPException(
+                        status_code=504,
+                        detail="La IA está tardando demasiado. Intenta de nuevo.",
+                    ) from error
+                print("Gemini agotó el timeout o no está disponible; reintento en 2 segundos.")
+                await asyncio.sleep(2)
+
+        if response is None:
+            raise HTTPException(
+                status_code=504,
+                detail="La IA está tardando demasiado. Intenta de nuevo.",
+            )
         print(
             "Gemini generó correctamente las preguntas en "
             f"{time.monotonic() - quiz_started_at:.2f}s."
