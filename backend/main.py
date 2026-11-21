@@ -7,6 +7,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Literal
+import unicodedata
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request as URLRequest, urlopen
@@ -26,6 +27,7 @@ from starlette.concurrency import run_in_threadpool
 from supabase import create_client
 
 app = FastAPI()
+MASTERED_LEVEL_THRESHOLD = 2
 
 app.add_middleware(
     CORSMiddleware,
@@ -165,7 +167,7 @@ class FlashcardScheduleRequest(BaseModel):
 class AttemptRequest(BaseModel):
     tipo: Literal["quiz", "flashcard"]
     acierto: bool
-    tema: str = Field(..., min_length=1, max_length=500)
+    tema: str = Field(..., min_length=1, max_length=2000)
     historia_id: UUID | None = Field(default=None)
 
 
@@ -540,47 +542,188 @@ def read_attempt_statistics() -> dict:
             detail="El backend requiere SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY.",
         )
 
-    page_size = 1000
-    table = create_client(supabase_url, service_role_key).table("historial_intentos")
-    first_page = table.select("acierto,tema", count="exact").range(0, page_size - 1).execute()
-    total_respondidas = first_page.count or 0
-    attempts = list(first_page.data or [])
+    client = create_client(supabase_url, service_role_key)
+    attempts, _ = fetch_all_rows(
+        client.table("historial_intentos"),
+        "tipo,acierto,tema",
+    )
+    cards, total_cards = fetch_all_rows(
+        client.table("flashcards"),
+        "id,nivel_dominio,frase_francesa",
+    )
 
-    while len(attempts) < total_respondidas:
-        start = len(attempts)
-        next_page = table.select("acierto,tema").range(start, start + page_size - 1).execute()
-        page = next_page.data or []
+    quiz_attempts = [attempt for attempt in attempts if attempt.get("tipo") == "quiz"]
+    flashcard_attempts = [
+        attempt for attempt in attempts if attempt.get("tipo") == "flashcard"
+    ]
+
+    category_totals = Counter()
+    category_correct = Counter()
+    quiz_failures = Counter()
+    for attempt in quiz_attempts:
+        topic = attempt.get("tema")
+        category = classify_quiz_category(topic)
+        category_totals[category] += 1
+        if attempt.get("acierto") is True:
+            category_correct[category] += 1
+        elif attempt.get("acierto") is False and isinstance(topic, str) and topic.strip():
+            quiz_failures[topic.strip()] += 1
+
+    total_quiz = len(quiz_attempts)
+    correct_quiz = sum(attempt.get("acierto") is True for attempt in quiz_attempts)
+    total_flashcard_reviews = len(flashcard_attempts)
+    correct_flashcard_reviews = sum(
+        attempt.get("acierto") is True for attempt in flashcard_attempts
+    )
+
+    difficult_cards = Counter(
+        front.strip()
+        for attempt in flashcard_attempts
+        if attempt.get("acierto") is False
+        and isinstance((front := attempt.get("tema")), str)
+        and front.strip()
+    )
+    ranked_cards = []
+    for card in cards:
+        front = card.get("frase_francesa")
+        if not isinstance(front, str) or not front.strip():
+            continue
+        front = front.strip()
+        mastery_level = card.get("nivel_dominio")
+        if not isinstance(mastery_level, (int, float)) or isinstance(mastery_level, bool):
+            mastery_level = 0
+        ranked_cards.append(
+            {
+                "frente": front,
+                "fallos": difficult_cards[front],
+                "nivel_dominio": mastery_level,
+            }
+        )
+    ranked_cards.sort(
+        key=lambda card: (
+            -card["fallos"],
+            card["nivel_dominio"],
+            card["frente"].casefold(),
+        )
+    )
+
+    category_names = ("Vocabulario", "Gramática", "Comprensión")
+    return {
+        "quiz": {
+            "precision_global": round(correct_quiz / total_quiz * 100, 2)
+            if total_quiz
+            else 0.0,
+            "total_respondidas": total_quiz,
+            "desglose": [
+                {
+                    "categoria": category,
+                    "porcentaje": round(
+                        category_correct[category] / category_totals[category] * 100,
+                        2,
+                    )
+                    if category_totals[category]
+                    else 0.0,
+                }
+                for category in category_names
+            ],
+            "puntos_debiles": [
+                {"tema": topic, "fallos": failures}
+                for topic, failures in sorted(
+                    quiz_failures.items(),
+                    key=lambda item: (-item[1], item[0].casefold()),
+                )[:3]
+            ],
+        },
+        "flashcards": {
+            "tasa_retencion": round(
+                correct_flashcard_reviews / total_flashcard_reviews * 100,
+                2,
+            )
+            if total_flashcard_reviews
+            else 0.0,
+            "tarjetas_dominadas": sum(
+                isinstance(card.get("nivel_dominio"), (int, float))
+                and not isinstance(card.get("nivel_dominio"), bool)
+                and card["nivel_dominio"] >= MASTERED_LEVEL_THRESHOLD
+                for card in cards
+            ),
+            "total_tarjetas": total_cards,
+            "total_repasadas": total_flashcard_reviews,
+            "tarjetas_dificiles": [
+                {
+                    "frente": card["frente"],
+                    "fallos": card["fallos"],
+                    "nivel_dominio": card["nivel_dominio"],
+                }
+                for card in ranked_cards[:3]
+            ],
+        },
+    }
+
+
+def fetch_all_rows(table, columns: str) -> tuple[list[dict], int]:
+    page_size = 1000
+    first_page = table.select(columns, count="exact").range(0, page_size - 1).execute()
+    total = first_page.count or 0
+    rows = list(first_page.data or [])
+
+    while len(rows) < total:
+        start = len(rows)
+        page = table.select(columns).range(start, start + page_size - 1).execute().data or []
         if not page:
             raise HTTPException(
                 status_code=502,
-                detail="No se pudo completar la lectura del historial de intentos.",
+                detail="No se pudo completar la lectura de las estadísticas.",
             )
-        attempts.extend(page)
+        rows.extend(page)
 
-    attempts = attempts[:total_respondidas]
-    correct_count = sum(attempt.get("acierto") is True for attempt in attempts)
-    failures_by_topic = Counter(
-        topic.strip()
-        for attempt in attempts
-        if attempt.get("acierto") is False
-        and isinstance((topic := attempt.get("tema")), str)
-        and topic.strip()
+    return rows[:total], total
+
+
+def classify_quiz_category(topic: object) -> str:
+    if not isinstance(topic, str):
+        return "Comprensión"
+
+    normalized_topic = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", topic.casefold())
+        if not unicodedata.combining(character)
     )
-    weak_topics = [
-        topic
-        for topic, _ in sorted(
-            failures_by_topic.items(),
-            key=lambda item: (-item[1], item[0].casefold()),
-        )[:3]
-    ]
-
-    return {
-        "total_respondidas": total_respondidas,
-        "porcentaje_acierto": round(correct_count / total_respondidas * 100, 2)
-        if total_respondidas
-        else 0.0,
-        "temas_debiles": weak_topics,
-    }
+    if any(keyword in normalized_topic for keyword in ("vocab", "lexique", "lexical")):
+        return "Vocabulario"
+    if any(
+        keyword in normalized_topic
+        for keyword in ("comprehension", "lecture", "personnage", "action", "detail", "histoire")
+    ):
+        return "Comprensión"
+    if any(
+        keyword in normalized_topic
+        for keyword in (
+            "grammaire",
+            "gramatica",
+            "passe compose",
+            "passe simple",
+            "imparfait",
+            "futur",
+            "conditionnel",
+            "subjonctif",
+            "preposition",
+            "preposicion",
+            "verbe",
+            "verbo",
+            "conjugaison",
+            "conjugacion",
+            "accord",
+            "pronom",
+            "pronoun",
+            "adjectif",
+            "adjetivo",
+            "article",
+            "negation",
+        )
+    ):
+        return "Gramática"
+    return "Comprensión"
 
 
 @app.get("/api/estadisticas")

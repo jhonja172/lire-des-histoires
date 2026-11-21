@@ -16,12 +16,20 @@ const quizScreen = document.querySelector("#quiz-screen");
 const statisticsScreen = document.querySelector("#statistics-screen");
 const openStatisticsCard = document.querySelector("#open-statistics-card");
 const backHomeFromStatisticsButton = document.querySelector("#back-home-from-statistics");
-const statisticsPercentage = document.querySelector("#statistics-percentage");
-const statisticsProgressTrack = document.querySelector("#statistics-progress-track");
-const statisticsProgressFill = document.querySelector("#statistics-progress-fill");
-const statisticsTotalAnswered = document.querySelector("#statistics-total-answered");
+const statisticsQuizMeter = document.querySelector("#statistics-quiz-meter");
+const statisticsQuizPrecision = document.querySelector("#statistics-quiz-precision");
+const statisticsFlashcardMeter = document.querySelector("#statistics-flashcard-meter");
+const statisticsFlashcardRetention = document.querySelector("#statistics-flashcard-retention");
+const statisticsActivitySummary = document.querySelector("#statistics-activity-summary");
+const statisticsQuizBreakdown = document.querySelector("#statistics-quiz-breakdown");
 const statisticsWeakTopics = document.querySelector("#statistics-weak-topics");
 const statisticsNoWeakTopics = document.querySelector("#statistics-no-weak-topics");
+const statisticsMasteredCards = document.querySelector("#statistics-mastered-cards");
+const statisticsTotalCards = document.querySelector("#statistics-total-cards");
+const statisticsMasteryMeter = document.querySelector("#statistics-mastery-meter");
+const statisticsMasteryFill = document.querySelector("#statistics-mastery-fill");
+const statisticsDifficultCards = document.querySelector("#statistics-difficult-cards");
+const statisticsNoDifficultCards = document.querySelector("#statistics-no-difficult-cards");
 const storyList = document.querySelector("#story-list");
 const emptyLibrary = document.querySelector("#empty-library");
 const statusMessage = document.querySelector("#status-message");
@@ -324,8 +332,11 @@ function setStatus(message, isError = false) {
 
 async function openStatistics() {
   showScreen("statistics");
+  statisticsQuizBreakdown.replaceChildren();
   statisticsWeakTopics.replaceChildren();
+  statisticsDifficultCards.replaceChildren();
   statisticsNoWeakTopics.hidden = true;
+  statisticsNoDifficultCards.hidden = true;
   setStatus("Cargando estadísticas…");
 
   try {
@@ -335,37 +346,46 @@ async function openStatistics() {
     }
 
     const statistics = await response.json();
-    if (
-      !Number.isInteger(statistics?.total_respondidas)
-      || statistics.total_respondidas < 0
-      || typeof statistics.porcentaje_acierto !== "number"
-      || !Number.isFinite(statistics.porcentaje_acierto)
-      || !Array.isArray(statistics.temas_debiles)
-      || statistics.temas_debiles.some((topic) => typeof topic !== "string")
+    const quiz = statistics?.quiz;
+    const flashcardsStats = statistics?.flashcards;
+    if (!isValidPercentage(quiz?.precision_global)
+      || !Number.isInteger(quiz?.total_respondidas)
+      || quiz.total_respondidas < 0
+      || !Array.isArray(quiz?.desglose)
+      || quiz.desglose.some((category) =>
+        typeof category?.categoria !== "string" || !isValidPercentage(category?.porcentaje))
+      || !Array.isArray(quiz?.puntos_debiles)
+      || quiz.puntos_debiles.some((topic) =>
+        typeof topic?.tema !== "string" || !Number.isInteger(topic?.fallos) || topic.fallos < 1)
+      || !isValidPercentage(flashcardsStats?.tasa_retencion)
+      || !Number.isInteger(flashcardsStats?.tarjetas_dominadas)
+      || flashcardsStats.tarjetas_dominadas < 0
+      || !Number.isInteger(flashcardsStats?.total_tarjetas)
+      || flashcardsStats.total_tarjetas < flashcardsStats.tarjetas_dominadas
+      || !Number.isInteger(flashcardsStats?.total_repasadas)
+      || flashcardsStats.total_repasadas < 0
+      || !Array.isArray(flashcardsStats?.tarjetas_dificiles)
+      || flashcardsStats.tarjetas_dificiles.some((card) =>
+        typeof card?.frente !== "string"
+        || !Number.isInteger(card?.fallos)
+        || card.fallos < 0
+        || !Number.isInteger(card?.nivel_dominio)
+        || card.nivel_dominio < 0)
     ) {
       throw new Error("El servidor devolvió estadísticas inválidas.");
     }
 
-    const percentage = Math.min(100, Math.max(0, statistics.porcentaje_acierto));
-    const percentageText = `${percentage.toLocaleString("es-ES", {
-      maximumFractionDigits: 2,
-    })}%`;
-    statisticsPercentage.textContent = percentageText;
-    statisticsProgressFill.style.width = `${percentage}%`;
-    statisticsProgressTrack.setAttribute("aria-valuenow", String(percentage));
-    statisticsProgressTrack.setAttribute("aria-valuetext", percentageText);
-    statisticsTotalAnswered.textContent = `Has respondido ${statistics.total_respondidas} preguntas.`;
-
-    const weakTopics = statistics.temas_debiles
-      .filter((topic) => topic.trim())
-      .slice(0, 3);
-    for (const topic of weakTopics) {
-      const item = document.createElement("li");
-      item.className = "story-list-item";
-      item.textContent = topic;
-      statisticsWeakTopics.append(item);
-    }
-    statisticsNoWeakTopics.hidden = weakTopics.length > 0;
+    setStatisticsMeter(statisticsQuizMeter, statisticsQuizPrecision, quiz.precision_global);
+    setStatisticsMeter(
+      statisticsFlashcardMeter,
+      statisticsFlashcardRetention,
+      flashcardsStats.tasa_retencion,
+    );
+    statisticsActivitySummary.textContent =
+      `Has respondido ${quiz.total_respondidas} preguntas y repasado ${flashcardsStats.total_repasadas} tarjetas.`;
+    renderQuizBreakdown(quiz.desglose);
+    renderWeakTopics(quiz.puntos_debiles);
+    renderFlashcardStatistics(flashcardsStats);
     setStatus("");
   } catch (error) {
     setStatus(
@@ -373,6 +393,97 @@ async function openStatistics() {
       true,
     );
   }
+}
+
+function isValidPercentage(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
+}
+
+function formatPercentage(value) {
+  return `${value.toLocaleString("es-ES", { maximumFractionDigits: 2 })}%`;
+}
+
+function setStatisticsMeter(meter, valueElement, value) {
+  const percentage = Math.min(100, Math.max(0, value));
+  const text = formatPercentage(percentage);
+  valueElement.textContent = text;
+  meter.style.setProperty("--statistics-value", `${percentage}%`);
+  meter.setAttribute("aria-valuenow", String(percentage));
+  meter.setAttribute("aria-valuetext", text);
+}
+
+function renderQuizBreakdown(categories) {
+  for (const category of categories) {
+    const item = document.createElement("li");
+    item.className = "statistics-breakdown-item";
+
+    const heading = document.createElement("div");
+    heading.className = "statistics-breakdown-heading";
+    const name = document.createElement("span");
+    name.textContent = category.categoria;
+    const percentage = document.createElement("strong");
+    percentage.textContent = formatPercentage(category.porcentaje);
+    heading.append(name, percentage);
+
+    const track = document.createElement("div");
+    track.className = "statistics-horizontal-track";
+    track.setAttribute("role", "progressbar");
+    track.setAttribute("aria-label", category.categoria);
+    track.setAttribute("aria-valuenow", String(category.porcentaje));
+    track.setAttribute("aria-valuemin", "0");
+    track.setAttribute("aria-valuemax", "100");
+    const fill = document.createElement("span");
+    fill.style.width = `${category.porcentaje}%`;
+    track.append(fill);
+    item.append(heading, track);
+    statisticsQuizBreakdown.append(item);
+  }
+}
+
+function renderWeakTopics(topics) {
+  const weakTopics = topics
+    .filter((topic) => topic.tema.trim())
+    .slice(0, 3);
+  for (const topic of weakTopics) {
+    const item = document.createElement("li");
+    item.className = "statistics-tag";
+    item.textContent = `${topic.tema} · ${topic.fallos} fallos`;
+    statisticsWeakTopics.append(item);
+  }
+  statisticsNoWeakTopics.hidden = weakTopics.length > 0;
+}
+
+function renderFlashcardStatistics(flashcardsStats) {
+  statisticsMasteredCards.textContent = String(flashcardsStats.tarjetas_dominadas);
+  statisticsTotalCards.textContent = String(flashcardsStats.total_tarjetas);
+  const masteryPercentage = flashcardsStats.total_tarjetas
+    ? flashcardsStats.tarjetas_dominadas / flashcardsStats.total_tarjetas * 100
+    : 0;
+  statisticsMasteryFill.style.width = `${masteryPercentage}%`;
+  statisticsMasteryMeter.setAttribute("aria-valuenow", String(masteryPercentage));
+  statisticsMasteryMeter.setAttribute("aria-valuetext", formatPercentage(masteryPercentage));
+
+  const difficultCards = flashcardsStats.tarjetas_dificiles.slice(0, 3);
+  for (const card of difficultCards) {
+    const item = document.createElement("li");
+    item.className = "statistics-difficult-card";
+    const front = document.createElement("span");
+    front.className = "statistics-difficult-front";
+    const difficulty = card.fallos > 0
+      ? `${card.fallos} fallos`
+      : `nivel de dominio ${card.nivel_dominio}`;
+    front.textContent = `${card.frente} · ${difficulty}`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary-button statistics-flashcards-link";
+    button.textContent = "Ir a Flashcards";
+    button.addEventListener("click", () => {
+      void openFlashcards();
+    });
+    item.append(front, button);
+    statisticsDifficultCards.append(item);
+  }
+  statisticsNoDifficultCards.hidden = difficultCards.length > 0;
 }
 
 function storyTitle(content) {
@@ -1370,7 +1481,7 @@ flashcardRatingButtons.addEventListener("click", async (event) => {
       await postAttempt(
         "flashcard",
         rating >= 3,
-        flashcard.frase_francesa.slice(0, 500),
+        flashcard.frase_francesa,
       );
       flashcardAttemptSaved = true;
       flashcardAttemptRating = rating;

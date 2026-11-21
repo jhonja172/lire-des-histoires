@@ -189,38 +189,83 @@
         </div>
       </section>
 
-      <section id="statistics-screen" class="screen" aria-labelledby="statistics-title" hidden>
+      <section id="statistics-screen" class="screen statistics-screen" aria-labelledby="statistics-title" hidden>
         <button id="back-home-from-statistics" class="text-button back-button" type="button">
           <span aria-hidden="true">←</span> Volver al inicio
         </button>
-        <div class="page-heading">
-          <div>
-            <p class="eyebrow">Tu aprendizaje</p>
-            <h1 id="statistics-title">Tu Progreso</h1>
-          </div>
+        <div class="statistics-heading">
+          <p class="eyebrow">Tu aprendizaje</p>
+          <h1 id="statistics-title">Tu Progreso</h1>
         </div>
-        <article class="progress-card">
-          <div>
-            <p class="eyebrow">Porcentaje de acierto</p>
-            <p class="progress-count"><strong id="statistics-percentage">0%</strong></p>
-          </div>
-          <span class="progress-icon" aria-hidden="true">✦</span>
-          <div
-            id="statistics-progress-track"
-            class="progress-track"
-            role="progressbar"
-            aria-label="Porcentaje de acierto"
-            aria-valuenow="0"
-            aria-valuemin="0"
-            aria-valuemax="100"
-          >
-            <span id="statistics-progress-fill"></span>
-          </div>
-        </article>
-        <p id="statistics-total-answered" class="progress-count">Has respondido 0 preguntas.</p>
-        <h2>Puntos a mejorar</h2>
-        <ul id="statistics-weak-topics" class="story-list" aria-label="Temas con más errores"></ul>
-        <p id="statistics-no-weak-topics" class="empty-state" hidden>Aún no hay temas para mejorar.</p>
+        <div class="statistics-meters">
+          <article class="statistics-card statistics-meter-card">
+            <p class="eyebrow">Precisión en Quiz</p>
+            <div
+              id="statistics-quiz-meter"
+              class="statistics-meter statistics-meter-quiz"
+              role="progressbar"
+              aria-label="Precisión en Quiz"
+              aria-valuenow="0"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <span id="statistics-quiz-precision">0%</span>
+            </div>
+          </article>
+          <article class="statistics-card statistics-meter-card">
+            <p class="eyebrow">Precisión en Flashcards</p>
+            <div
+              id="statistics-flashcard-meter"
+              class="statistics-meter statistics-meter-flashcards"
+              role="progressbar"
+              aria-label="Tasa de retención de Flashcards"
+              aria-valuenow="0"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <span id="statistics-flashcard-retention">0%</span>
+            </div>
+          </article>
+        </div>
+        <p id="statistics-activity-summary" class="statistics-activity-summary">
+          Has respondido 0 preguntas y repasado 0 tarjetas.
+        </p>
+        <div class="statistics-sections">
+          <section class="statistics-card" aria-labelledby="statistics-breakdown-title">
+            <h2 id="statistics-breakdown-title">Desglose del Quiz</h2>
+            <ul id="statistics-quiz-breakdown" class="statistics-breakdown"></ul>
+          </section>
+          <section class="statistics-card" aria-labelledby="statistics-weak-topics-title">
+            <h2 id="statistics-weak-topics-title">Puntos débiles</h2>
+            <ul id="statistics-weak-topics" class="statistics-tags" aria-label="Temas con más errores"></ul>
+            <p id="statistics-no-weak-topics" class="statistics-empty" hidden>
+              Aún no hay temas para mejorar.
+            </p>
+          </section>
+          <section class="statistics-card statistics-flashcard-section" aria-labelledby="statistics-flashcards-title">
+            <h2 id="statistics-flashcards-title">Rendimiento Flashcards</h2>
+            <p class="statistics-mastery-label">
+              Has dominado <strong id="statistics-mastered-cards">0</strong> de
+              <strong id="statistics-total-cards">0</strong> tarjetas
+            </p>
+            <div
+              id="statistics-mastery-meter"
+              class="statistics-horizontal-track statistics-mastery-meter"
+              role="progressbar"
+              aria-label="Tarjetas dominadas"
+              aria-valuenow="0"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <span id="statistics-mastery-fill"></span>
+            </div>
+            <h3>Tarjetas más difíciles</h3>
+            <ul id="statistics-difficult-cards" class="statistics-difficult-cards"></ul>
+            <p id="statistics-no-difficult-cards" class="statistics-empty" hidden>
+              Aún no hay tarjetas difíciles.
+            </p>
+          </section>
+        </div>
       </section>
 
       <section id="add-screen" class="screen" aria-labelledby="add-title" hidden>

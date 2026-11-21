@@ -923,6 +923,238 @@ textarea:focus-visible,
   box-shadow: 0 24px 70px rgb(15 23 42 / 20%);
 }
 
+.statistics-screen {
+  display: grid;
+  gap: 22px;
+}
+
+.statistics-screen > .back-button,
+.statistics-heading,
+.statistics-activity-summary {
+  margin-bottom: 0;
+}
+
+.statistics-heading h1 {
+  margin: 0;
+}
+
+.statistics-meters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.statistics-card {
+  min-width: 0;
+  padding: clamp(18px, 4vw, 26px);
+  border: 1px solid #e8ebf0;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #fff, #f8faff);
+  box-shadow: 0 10px 28px rgb(23 32 51 / 6%);
+}
+
+.statistics-card h2,
+.statistics-card h3 {
+  margin: 0 0 18px;
+  color: #172033;
+}
+
+.statistics-card h2 {
+  font-size: 1.15rem;
+}
+
+.statistics-card h3 {
+  margin-top: 24px;
+  margin-bottom: 12px;
+  font-size: 0.98rem;
+}
+
+.statistics-meter-card {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+  background: linear-gradient(145deg, #f2f7ff, #fff);
+}
+
+.statistics-meter-card .eyebrow {
+  margin: 0;
+}
+
+.statistics-meter {
+  --statistics-value: 0%;
+  display: grid;
+  width: clamp(118px, 20vw, 156px);
+  aspect-ratio: 1;
+  padding: 10px;
+  border-radius: 50%;
+  background: conic-gradient(#4f7df3 var(--statistics-value), #e7edf7 0);
+  place-items: center;
+}
+
+.statistics-meter-quiz {
+  background: conic-gradient(#4f7df3 var(--statistics-value), #e7edf7 0);
+}
+
+.statistics-meter-flashcards {
+  background: conic-gradient(#53b88a var(--statistics-value), #e7edf7 0);
+}
+
+.statistics-meter span {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #fff;
+  color: #172033;
+  font-size: clamp(1.35rem, 3vw, 1.8rem);
+  font-weight: 700;
+  place-items: center;
+}
+
+.statistics-activity-summary {
+  color: #64748b;
+  font-weight: 600;
+  text-align: center;
+}
+
+.statistics-sections {
+  display: grid;
+  gap: 16px;
+}
+
+.statistics-breakdown,
+.statistics-tags,
+.statistics-difficult-cards {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.statistics-breakdown-item {
+  display: grid;
+  gap: 8px;
+}
+
+.statistics-breakdown-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #445066;
+  font-size: 0.9rem;
+}
+
+.statistics-breakdown-heading strong {
+  color: #172033;
+}
+
+.statistics-horizontal-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf1f7;
+}
+
+.statistics-horizontal-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7d9df5, #4f7df3);
+  transition: width 350ms ease;
+}
+
+.statistics-mastery-meter span {
+  background: linear-gradient(90deg, #8bd1ac, #42a977);
+}
+
+.statistics-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.statistics-tag {
+  padding: 8px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.statistics-empty {
+  margin: 12px 0 0;
+  color: #7a8496;
+  font-size: 0.9rem;
+}
+
+.statistics-mastery-label {
+  margin: 0 0 10px;
+  color: #64748b;
+}
+
+.statistics-mastery-label strong {
+  color: #172033;
+}
+
+.statistics-difficult-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #edf0f5;
+}
+
+.statistics-difficult-front {
+  min-width: 0;
+  color: #445066;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.statistics-flashcards-link {
+  min-height: 36px;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  font-size: 0.8rem;
+}
+
+@media (min-width: 700px) {
+  .statistics-sections {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .statistics-flashcard-section {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 460px) {
+  .statistics-meters {
+    gap: 10px;
+  }
+
+  .statistics-meter-card {
+    padding: 16px 10px;
+  }
+
+  .statistics-difficult-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .statistics-flashcards-link {
+    justify-self: start;
+  }
+}
+
 .modal-close {
   position: absolute;
   top: 10px;
