@@ -139,6 +139,7 @@ class TextRequest(BaseModel):
 
 class QuizRequest(BaseModel):
     texto: str = Field(..., min_length=1, max_length=5000)
+    nivel: Literal["A1", "B1", "B2"] = "A1"
 
 
 class FlashcardRequest(BaseModel):
@@ -738,15 +739,28 @@ async def generate_quiz(request: QuizRequest):
     if not text:
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío.")
 
+    if request.nivel == "A1":
+        level_instruction = (
+            "Nivel A1 (Principiante): formula preguntas de comprensión literal "
+            "sobre información explícita y directa del texto."
+        )
+    elif request.nivel == "B1":
+        level_instruction = (
+            "Nivel B1 (Intermedio): formula preguntas que requieran relacionar "
+            "hechos y comprender relaciones de causa y efecto."
+        )
+    else:
+        level_instruction = (
+            "Nivel B2 (Avanzado): formula preguntas que requieran inferencias, "
+            "interpretación de matices y análisis del contexto, además de "
+            "comprensión de información explícita."
+        )
+
     prompt = (
         "Es OBLIGATORIO que generes 5 preguntas de comprensión lectora completamente "
         "diferentes a las anteriores. Varía los personajes, las acciones y las "
         "estructuras. No repitas preguntas ni opciones. "
-        "Genera preguntas de un nivel avanzado (B2-C1). No te limites a preguntas "
-        "de comprensión literal. Incluye preguntas que requieran inferencia, "
-        "análisis del contexto, comprensión de matices gramaticales (como tiempos "
-        "verbales complejos o estructuras subjuntivas) y vocabulario más sofisticado "
-        "presente en el texto. "
+        f"{level_instruction} "
         "Para evitar repeticiones, concéntrate en generar preguntas sobre aspectos "
         "del texto que no hayas explorado antes. Varía el foco: si en una pregunta "
         "anterior te centraste en un personaje, ahora céntrate en otro, en una acción "

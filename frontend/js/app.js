@@ -45,6 +45,7 @@ const quizLoading = document.querySelector("#quiz-loading");
 const quizLoadingMessage = document.querySelector("#quiz-loading-message");
 const quizStoryPicker = document.querySelector("#quiz-story-picker");
 const quizStorySelect = document.querySelector("#quiz-story-select");
+const quizLevelSelect = document.querySelector("#quiz-level-select");
 const startQuizButton = document.querySelector("#start-quiz-button");
 const quizQuestionProgress = document.querySelector("#quiz-question-progress");
 const quizQuestionCard = document.querySelector("#quiz-question-card");
@@ -1014,7 +1015,7 @@ async function showNextQuizQuestion() {
   renderCurrentQuizQuestion();
 }
 
-async function startQuiz(text) {
+async function startQuiz(text, level = quizLevelSelect.value) {
   quizRequestController?.abort();
   const controller = new AbortController();
   let timedOut = false;
@@ -1036,7 +1037,7 @@ async function startQuiz(text) {
     const response = await fetch(`${API_URL}/api/generar_preguntas`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ texto: text }),
+      body: JSON.stringify({ texto: text, nivel: level }),
       signal: controller.signal,
     });
     if (!response.ok) {
@@ -1081,11 +1082,6 @@ async function openQuiz() {
   quizOptions.replaceChildren();
   setStatus("");
 
-  if (currentStoryText) {
-    await startQuiz(currentStoryText);
-    return;
-  }
-
   quizLoadingMessage.textContent = "Cargando historias…";
   quizLoading.hidden = false;
   try {
@@ -1099,19 +1095,15 @@ async function openQuiz() {
       return;
     }
 
-    if (stories.length === 1) {
-      currentStoryText = stories[0].content.trim();
-      currentStoryId = stories[0].id ? String(stories[0].id) : null;
-      await startQuiz(currentStoryText);
-      return;
-    }
-
     quizStorySelect.replaceChildren();
     for (const story of stories) {
       const option = document.createElement("option");
       option.value = String(story.id);
       option.textContent = storyTitle(story.content);
       quizStorySelect.append(option);
+    }
+    if (stories.some((story) => String(story.id) === currentStoryId)) {
+      quizStorySelect.value = currentStoryId;
     }
     quizStoryPicker.hidden = false;
   } catch (error) {
@@ -1360,7 +1352,7 @@ startQuizButton.addEventListener("click", () => {
 
   currentStoryText = story.content.trim();
   currentStoryId = story.id ? String(story.id) : null;
-  void startQuiz(currentStoryText);
+  void startQuiz(currentStoryText, quizLevelSelect.value);
 });
 addTextButton.addEventListener("click", () => {
   showScreen("add");

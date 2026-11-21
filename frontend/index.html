@@ -159,8 +159,20 @@
           <span id="quiz-loading-message">Generando preguntas...</span>
         </div>
         <div id="quiz-story-picker" class="quiz-story-picker" hidden>
-          <label for="quiz-story-select">Elige una historia para crear tus preguntas</label>
-          <select id="quiz-story-select"></select>
+          <div class="quiz-picker-fields">
+            <div class="quiz-picker-field">
+              <label for="quiz-story-select">Elige una historia para crear tus preguntas</label>
+              <select id="quiz-story-select"></select>
+            </div>
+            <div class="quiz-picker-field">
+              <label for="quiz-level-select">Nivel de dificultad</label>
+              <select id="quiz-level-select">
+                <option value="A1" selected>Principiante (A1)</option>
+                <option value="B1">Intermedio (B1)</option>
+                <option value="B2">Avanzado (B2)</option>
+              </select>
+            </div>
+          </div>
           <button id="start-quiz-button" class="primary-button" type="button">Empezar quiz</button>
         </div>
         <div id="quiz-question-progress" class="quiz-question-progress" aria-live="polite" hidden></div>
