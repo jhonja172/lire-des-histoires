@@ -1,4 +1,4 @@
-import { getStories, saveStory } from "./storage.js";
+import { deleteStory, getStories, saveStory } from "./storage.js";
 import { startKaraoke } from "./karaoke.js";
 import {
   deleteFlashcard,
@@ -63,6 +63,7 @@ const quizFromReaderButton = document.querySelector("#quiz-from-reader-button");
 const cancelAddButton = document.querySelector("#cancel-add-button");
 const storyForm = document.querySelector("#story-form");
 const storyText = document.querySelector("#story-text");
+const storyLevel = document.querySelector("#story-level");
 const saveButton = document.querySelector("#save-button");
 const readerTitle = document.querySelector("#reader-title");
 const readerLines = document.querySelector("#reader-lines");
@@ -99,6 +100,10 @@ let currentStoryText = "";
 let currentStoryId = null;
 let currentAudioText = null;
 let currentAudioUrl = null;
+let wordAudioController = null;
+let wordAudioRequestId = 0;
+let wordAudioUrl = null;
+let activeWordAudioElement = null;
 let currentWordBoundaries = [];
 window.wordBoundaries = currentWordBoundaries;
 let wordElements = [];
@@ -500,41 +505,93 @@ function renderStoryList() {
   storyList.replaceChildren();
   emptyLibrary.hidden = stories.length > 0;
 
-  for (const story of stories) {
-    const item = document.createElement("li");
-    item.className = "story-list-item";
-
-    const titleButton = document.createElement("button");
-    titleButton.type = "button";
-    titleButton.className = "story-title-button";
-    titleButton.textContent = storyTitle(story.content);
-    titleButton.addEventListener("click", () => openStory(story));
-    item.append(titleButton);
-
-    const quizButton = document.createElement("button");
-    quizButton.type = "button";
-    quizButton.className = "primary-button story-quiz-button";
-    quizButton.textContent = "Hacer Quiz";
-    quizButton.setAttribute("aria-label", `Hacer Quiz: ${storyTitle(story.content)}`);
-    quizButton.addEventListener("click", () => {
-      currentStoryText = story.content.trim();
-      currentStoryId = story.id ? String(story.id) : null;
-      void openQuiz();
+  for (const level of ["A2", "B1", "B2"]) {
+    const levelStories = stories.filter((story) => {
+      const storyLevel = ["A2", "B1", "B2"].includes(story.nivel) ? story.nivel : "A2";
+      return storyLevel === level;
     });
-    item.append(quizButton);
-
-    if (story.created_at) {
-      const date = document.createElement("time");
-      date.className = "story-date";
-      date.dateTime = story.created_at;
-      const parsedDate = new Date(story.created_at);
-      date.textContent = Number.isNaN(parsedDate.getTime())
-        ? story.created_at
-        : parsedDate.toLocaleDateString();
-      item.append(date);
+    if (!levelStories.length) {
+      continue;
     }
 
-    storyList.append(item);
+    const group = document.createElement("section");
+    group.className = "story-level-group";
+    const heading = document.createElement("h2");
+    heading.textContent = `Nivel ${level}`;
+    const list = document.createElement("ul");
+    list.className = "story-level-list";
+
+    for (const story of levelStories) {
+      const item = document.createElement("li");
+      item.className = "story-list-item";
+
+      const titleButton = document.createElement("button");
+      titleButton.type = "button";
+      titleButton.className = "story-title-button";
+      titleButton.textContent = storyTitle(story.content);
+      titleButton.addEventListener("click", () => openStory(story));
+      item.append(titleButton);
+
+      const actions = document.createElement("div");
+      actions.className = "story-actions";
+
+      const quizButton = document.createElement("button");
+      quizButton.type = "button";
+      quizButton.className = "primary-button story-quiz-button";
+      quizButton.textContent = "Hacer Quiz";
+      quizButton.setAttribute("aria-label", `Hacer Quiz: ${storyTitle(story.content)}`);
+      quizButton.addEventListener("click", () => {
+        currentStoryText = story.content.trim();
+        currentStoryId = story.id ? String(story.id) : null;
+        void openQuiz();
+      });
+      actions.append(quizButton);
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "secondary-button story-delete-button";
+      deleteButton.textContent = "Borrar";
+      deleteButton.setAttribute("aria-label", `Borrar: ${storyTitle(story.content)}`);
+      deleteButton.addEventListener("click", async () => {
+        if (!window.confirm(`¿Quieres borrar "${storyTitle(story.content)}"?`)) {
+          return;
+        }
+
+        deleteButton.disabled = true;
+        setStatus("Borrando historia…");
+        try {
+          await deleteStory(story.id);
+          if (currentStoryId === String(story.id)) {
+            currentStoryId = null;
+            currentStoryText = "";
+          }
+          if (await loadStories()) {
+            setStatus("Historia borrada.");
+          }
+        } catch (error) {
+          deleteButton.disabled = false;
+          setStatus(error instanceof Error ? error.message : "No se pudo borrar la historia.", true);
+        }
+      });
+      actions.append(deleteButton);
+      item.append(actions);
+
+      if (story.created_at) {
+        const date = document.createElement("time");
+        date.className = "story-date";
+        date.dateTime = story.created_at;
+        const parsedDate = new Date(story.created_at);
+        date.textContent = Number.isNaN(parsedDate.getTime())
+          ? story.created_at
+          : parsedDate.toLocaleDateString();
+        item.append(date);
+      }
+
+      list.append(item);
+    }
+
+    group.append(heading, list);
+    storyList.append(group);
   }
 }
 
@@ -627,15 +684,91 @@ function createWordElement(value) {
   word.textContent = value;
   word.tabIndex = 0;
   word.setAttribute("role", "button");
-  word.setAttribute("aria-label", `Consultar la palabra ${value}`);
-  word.addEventListener("click", () => lookupWord(word));
+  word.setAttribute(
+    "aria-label",
+    `Escuchar la pronunciación de ${value}. Alt y clic para consultar la traducción.`,
+  );
+  word.title = "Clic para escuchar; Alt + clic para consultar la traducción.";
+  word.addEventListener("click", (event) => {
+    if (event.altKey) {
+      void lookupWord(word);
+      return;
+    }
+    void playWordAudio(word);
+  });
   word.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      lookupWord(word);
+      if (event.altKey) {
+        void lookupWord(word);
+      } else {
+        void playWordAudio(word);
+      }
     }
   });
   return word;
+}
+
+async function playWordAudio(wordElement) {
+  const word = stripWordPunctuation(wordElement.textContent);
+  if (!word) {
+    return;
+  }
+
+  stopCurrentAudio();
+  const requestId = ++wordAudioRequestId;
+  const controller = new AbortController();
+  wordAudioController = controller;
+  activeWordAudioElement = wordElement;
+  wordElement.dataset.audioState = "loading";
+  wordElement.setAttribute("aria-busy", "true");
+  setStatus(`Generando pronunciación de “${word}”…`);
+
+  try {
+    const response = await fetch(`${API_URL}/api/audio/palabra`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ word }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(await readApiError(response));
+    }
+
+    const audioBlob = await response.blob();
+    if (!audioBlob.size || !audioBlob.type.startsWith("audio/")) {
+      throw new Error("El servidor no devolvió un archivo de audio válido.");
+    }
+    if (requestId !== wordAudioRequestId) {
+      return;
+    }
+
+    wordAudioUrl = URL.createObjectURL(audioBlob);
+    audioPlayer.src = wordAudioUrl;
+    await audioPlayer.play();
+    if (requestId === wordAudioRequestId) {
+      wordElement.dataset.audioState = "playing";
+      wordElement.removeAttribute("aria-busy");
+      setStatus("");
+    }
+  } catch (error) {
+    if (!controller.signal.aborted && requestId === wordAudioRequestId) {
+      wordElement.removeAttribute("data-audio-state");
+      wordElement.removeAttribute("aria-busy");
+      activeWordAudioElement = null;
+      if (wordAudioUrl) {
+        URL.revokeObjectURL(wordAudioUrl);
+        wordAudioUrl = null;
+      }
+      audioPlayer.removeAttribute("src");
+      audioPlayer.load();
+      setStatus(error instanceof Error ? error.message : "No se pudo reproducir la palabra.", true);
+    }
+  } finally {
+    if (wordAudioController === controller) {
+      wordAudioController = null;
+    }
+  }
 }
 
 function renderFrenchLine(paragraph, text, wordElements) {
@@ -694,7 +827,24 @@ async function translateReaderLines(signal) {
 }
 
 function stopCurrentAudio() {
+  const wasWordAudio = activeWordAudioElement !== null;
+  wordAudioRequestId += 1;
+  wordAudioController?.abort();
+  wordAudioController = null;
+  if (activeWordAudioElement) {
+    activeWordAudioElement.removeAttribute("data-audio-state");
+    activeWordAudioElement.removeAttribute("aria-busy");
+    activeWordAudioElement = null;
+  }
+  if (wordAudioUrl) {
+    URL.revokeObjectURL(wordAudioUrl);
+    wordAudioUrl = null;
+  }
   audioPlayer.pause();
+  if (wasWordAudio) {
+    audioPlayer.removeAttribute("src");
+    audioPlayer.load();
+  }
   stopKaraoke();
   stopKaraoke = () => {};
   currentAudioText = null;
@@ -1378,6 +1528,7 @@ cancelAddButton.addEventListener("click", () => {
 storyForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const content = storyText.value.trim();
+  const nivel = storyLevel.value;
   if (!content) {
     setStatus("Pega un texto antes de guardarlo.", true);
     storyText.focus();
@@ -1387,7 +1538,7 @@ storyForm.addEventListener("submit", async (event) => {
   saveButton.disabled = true;
   setStatus("Guardando texto…");
   try {
-    await saveStory(content);
+    await saveStory(content, nivel);
     storyText.value = "";
     showScreen("library");
     const refreshed = await loadStories();
@@ -1561,6 +1712,15 @@ audioPlayer.addEventListener("pause", () => {
 
 audioPlayer.addEventListener("ended", () => {
   stopKaraoke();
+  if (activeWordAudioElement) {
+    activeWordAudioElement.removeAttribute("data-audio-state");
+    activeWordAudioElement.removeAttribute("aria-busy");
+    activeWordAudioElement = null;
+  }
+  if (wordAudioUrl) {
+    URL.revokeObjectURL(wordAudioUrl);
+    wordAudioUrl = null;
+  }
   setPlayingState(false);
   setStatus("Reproducción finalizada.");
 });

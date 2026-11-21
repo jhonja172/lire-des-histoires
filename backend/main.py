@@ -138,6 +138,15 @@ class TextRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=5000)
 
 
+class StoryCreateRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=50000)
+    nivel: Literal["A2", "B1", "B2"] = "A2"
+
+
+class WordAudioRequest(BaseModel):
+    word: str = Field(..., min_length=1, max_length=200)
+
+
 class QuizRequest(BaseModel):
     texto: str = Field(..., min_length=1, max_length=5000)
     nivel: Literal["A2", "B1", "B2"] = "A2"
@@ -215,6 +224,66 @@ def read_root():
     return {"message": "Backend de Lire des Histoires listo"}
 
 
+def get_stories_table():
+    supabase_url = os.environ.get("SUPABASE_URL")
+    service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not service_role_key:
+        raise HTTPException(
+            status_code=500,
+            detail="El backend requiere SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY.",
+        )
+    return create_client(supabase_url, service_role_key).table("stories")
+
+
+def insert_story(content: str, nivel: str) -> dict:
+    try:
+        response = get_stories_table().insert({"content": content, "nivel": nivel}).execute()
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"Error guardando historia en Supabase: {error}")
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo guardar la historia en Supabase.",
+        ) from error
+
+    if not response.data:
+        raise HTTPException(status_code=502, detail="Supabase no confirmó la historia guardada.")
+    return response.data[0]
+
+
+def remove_story(story_id: UUID) -> None:
+    try:
+        table = get_stories_table()
+        existing_story = table.select("id").eq("id", str(story_id)).limit(1).execute()
+        if not existing_story.data:
+            raise HTTPException(status_code=404, detail="No se encontró la historia.")
+        table.delete().eq("id", str(story_id)).execute()
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"Error borrando historia de Supabase: {error}")
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo borrar la historia de Supabase.",
+        ) from error
+
+
+@app.post("/api/stories")
+async def create_story(request: StoryCreateRequest):
+    content = request.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="El texto de la historia no puede estar vacío.")
+    story = await run_in_threadpool(insert_story, content, request.nivel)
+    return {"story": story}
+
+
+@app.delete("/api/stories/{story_id}")
+async def delete_story(story_id: UUID):
+    await run_in_threadpool(remove_story, story_id)
+    return {"deleted": True}
+
+
 def remove_temp_audio_file(file_path: str) -> None:
     try:
         os.remove(file_path)
@@ -222,9 +291,7 @@ def remove_temp_audio_file(file_path: str) -> None:
         pass
 
 
-@app.post("/api/audio")
-async def generate_audio(request: TextRequest):
-    text = request.text.strip()
+async def generate_audio_response(text: str, filename: str):
     if not text:
         raise HTTPException(status_code=400, detail="El texto no puede estar vacío.")
 
@@ -259,9 +326,23 @@ async def generate_audio(request: TextRequest):
     return FileResponse(
         file_path,
         media_type="audio/mpeg",
-        filename="historia.mp3",
+        filename=filename,
         background=BackgroundTask(remove_temp_audio_file, file_path),
     )
+
+
+@app.post("/api/audio")
+async def generate_audio(request: TextRequest):
+    return await generate_audio_response(request.text.strip(), "historia.mp3")
+
+
+@app.post("/api/audio/palabra")
+async def generate_word_audio(request: WordAudioRequest):
+    word = request.word.strip()
+    if not word:
+        raise HTTPException(status_code=400, detail="La palabra no puede estar vacía.")
+    print(f"Generando pronunciación individual para una palabra con edge-tts.")
+    return await generate_audio_response(word, "palabra.mp3")
 
 
 @app.post("/api/generate_flashcard")

@@ -76,7 +76,7 @@
           </div>
           <button id="add-text-button" class="primary-button" type="button">Agregar Texto</button>
         </div>
-        <ul id="story-list" class="story-list" aria-label="Historias guardadas"></ul>
+        <div id="story-list" class="story-list" aria-label="Historias guardadas"></div>
         <p id="empty-library" class="empty-state" hidden>Aún no hay textos guardados. Agrega uno para empezar.</p>
       </section>
 
@@ -288,6 +288,12 @@
           <p class="eyebrow">Nueva lectura</p>
           <h1 id="add-title">Agregar texto</h1>
           <form id="story-form" class="story-form">
+            <label for="story-level">Nivel de la historia</label>
+            <select id="story-level" name="level">
+              <option value="A2" selected>A2</option>
+              <option value="B1">B1</option>
+              <option value="B2">B2</option>
+            </select>
             <label for="story-text">Pega tu texto en francés</label>
             <textarea
               id="story-text"
