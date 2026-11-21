@@ -504,20 +504,45 @@ function storyTitle(content) {
 function renderStoryList() {
   storyList.replaceChildren();
   emptyLibrary.hidden = stories.length > 0;
+  const defaultOpenLevel = ["A2", "B1", "B2"].find((level) =>
+    stories.some((story) => {
+      const storyLevel = ["A2", "B1", "B2"].includes(story.nivel) ? story.nivel : "A2";
+      return storyLevel === level;
+    }),
+  ) ?? "A2";
 
   for (const level of ["A2", "B1", "B2"]) {
     const levelStories = stories.filter((story) => {
       const storyLevel = ["A2", "B1", "B2"].includes(story.nivel) ? story.nivel : "A2";
       return storyLevel === level;
     });
-    if (!levelStories.length) {
-      continue;
-    }
 
     const group = document.createElement("section");
     group.className = "story-level-group";
+    const expanded = level === defaultOpenLevel;
     const heading = document.createElement("h2");
-    heading.textContent = `Nivel ${level}`;
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "story-level-toggle";
+    toggle.setAttribute("aria-expanded", String(expanded));
+    const panelId = `story-level-list-${level}`;
+    toggle.setAttribute("aria-controls", panelId);
+    const label = document.createElement("span");
+    const storyWord = levelStories.length === 1 ? "historia" : "historias";
+    label.textContent = `Nivel ${level} (${levelStories.length} ${storyWord})`;
+    const arrow = document.createElement("span");
+    arrow.className = "story-level-arrow";
+    arrow.setAttribute("aria-hidden", "true");
+    toggle.append(label, arrow);
+    heading.append(toggle);
+
+    const panel = document.createElement("div");
+    panel.id = panelId;
+    panel.className = `story-level-panel${expanded ? " is-open" : ""}`;
+    panel.setAttribute("aria-hidden", String(!expanded));
+    panel.inert = !expanded;
+    const panelContent = document.createElement("div");
+    panelContent.className = "story-level-panel-content";
     const list = document.createElement("ul");
     list.className = "story-level-list";
 
@@ -589,8 +614,24 @@ function renderStoryList() {
 
       list.append(item);
     }
+    if (!levelStories.length) {
+      const emptyItem = document.createElement("li");
+      emptyItem.className = "story-level-empty";
+      emptyItem.textContent = "No hay historias en este nivel.";
+      list.append(emptyItem);
+    }
 
-    group.append(heading, list);
+    toggle.addEventListener("click", () => {
+      const isExpanded = toggle.getAttribute("aria-expanded") === "true";
+      toggle.setAttribute("aria-expanded", String(!isExpanded));
+      panel.setAttribute("aria-hidden", String(isExpanded));
+      panel.inert = isExpanded;
+      panel.classList.toggle("is-open", !isExpanded);
+    });
+
+    panelContent.append(list);
+    panel.append(panelContent);
+    group.append(heading, panel);
     storyList.append(group);
   }
 }

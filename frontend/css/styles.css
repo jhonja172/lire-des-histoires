@@ -288,9 +288,69 @@ textarea:focus-visible,
 
 .story-level-group h2 {
   margin: 0;
-  color: #64748b;
-  font-size: 0.9rem;
+}
+
+.story-level-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  border: 1px solid #e8ebf0;
+  border-radius: 12px;
+  background: #f8faff;
+  color: #334155;
+  font: inherit;
+  font-size: 0.92rem;
   font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.story-level-toggle:hover {
+  border-color: #bfcef9;
+  background: #f2f6ff;
+}
+
+.story-level-toggle:focus-visible {
+  outline: 3px solid rgb(37 99 235 / 30%);
+  outline-offset: 3px;
+}
+
+.story-level-arrow {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 180ms ease;
+}
+
+.story-level-toggle[aria-expanded="true"] .story-level-arrow {
+  transform: rotate(225deg) translate(-2px, -1px);
+}
+
+.story-level-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms ease;
+}
+
+.story-level-panel.is-open {
+  grid-template-rows: 1fr;
+}
+
+.story-level-panel-content {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.story-level-panel.is-open .story-level-panel-content {
+  padding-top: 9px;
 }
 
 .story-level-list {
@@ -299,6 +359,14 @@ textarea:focus-visible,
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.story-level-empty {
+  padding: 14px 16px;
+  border: 1px dashed #dce2eb;
+  border-radius: 12px;
+  color: #8791a3;
+  font-size: 0.9rem;
 }
 
 .story-list-item {
